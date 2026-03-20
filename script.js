@@ -22,57 +22,61 @@ function showSyncToast(message, isError = false) {
 /* =====================
    SCORE ADAPTATIF PAR PLATEFORME
 ===================== */
-function calculateScore(platform, likes, comments, views) {
+function calculateRawScore(platform, likes, comments, views) {
   const ratio = views > 0 ? (likes + comments) / views : 0;
   let raw = 0;
  
   switch ((platform || "Reddit").toLowerCase()) {
- 
     case "reddit":
-      // Reddit : ratio × vues = les deux comptent ensemble
-      // Un post avec 97k vues ET bon ratio écrase un post avec 1k vues et même ratio
-      raw = (ratio * views * 0.1)       // ratio × volume = le vrai viral
-          + (Math.log10(views + 1) * 30) // bonus vues brutes
-          + (comments * 8)               // commentaires très valorisés
-          + (likes * 2);                 // likes en bonus
+      raw = (ratio * views * 0.1)
+          + (Math.log10(views + 1) * 30)
+          + (comments * 8)
+          + (likes * 2);
       break;
- 
     case "linkedin":
       raw = (ratio * views * 0.1)
           + (comments * 15)
           + (likes * 3)
           + (Math.log10(views + 1) * 10);
       break;
- 
     case "twitter/x":
       raw = (ratio * views * 0.1)
           + (likes * 5)
           + (comments * 8)
           + (Math.log10(views + 1) * 15);
       break;
- 
     case "instagram":
       raw = (ratio * views * 0.08)
           + (likes * 4)
           + (comments * 10)
           + (Math.log10(views + 1) * 20);
       break;
- 
     case "tiktok":
       raw = (Math.log10(views + 1) * 50)
           + (ratio * views * 0.05)
           + (likes * 2)
           + (comments * 6);
       break;
- 
     default:
       raw = (ratio * views * 0.1)
           + (comments * 6)
           + (likes * 2)
           + (Math.log10(views + 1) * 15);
   }
+  return raw;
+}
  
-  return Math.round(raw * 10) / 10;
+function calculateScore(platform, likes, comments, views) {
+  // Score brut
+  const raw = calculateRawScore(platform, likes, comments, views);
+ 
+  // Normaliser sur 10 en se basant sur les posts existants
+  if (posts.length === 0) return Math.round(raw * 10) / 10;
+ 
+  const allRaw = posts.map(p => calculateRawScore(p.platform, p.likes, p.comments, p.views));
+  const maxRaw = Math.max(...allRaw, raw, 1);
+ 
+  return Math.round((raw / maxRaw) * 100) / 10; // score sur 10
 }
  
 function convertSheetRow(row) {
