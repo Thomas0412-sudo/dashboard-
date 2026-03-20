@@ -23,11 +23,18 @@ function convertSheetRow(row) {
   let dateStr = "";
   if (row["Date publication"]) {
     const raw = String(row["Date publication"]).trim();
+    // Format dd/MM/yyyy ou dd/MM/yyyy HH:mm
     if (raw.match(/^\d{2}\/\d{2}\/\d{4}/)) {
       const parts = raw.split("/");
-      dateStr = `${parts[2]}-${parts[1]}-${parts[0].substring(0,2)}`;
+      dateStr = `${parts[2].substring(0,4)}-${parts[1].padStart(2,"0")}-${parts[0].padStart(2,"0")}`;
+    // Format yyyy-MM-dd
     } else if (raw.match(/^\d{4}-\d{2}-\d{2}/)) {
       dateStr = raw.substring(0, 10);
+    // Format "2026 00:00-MM-dd" (bug Google Sheets)
+    } else if (raw.match(/^\d{4}\s+\d{2}:\d{2}-\d{2}-\d{2}/)) {
+      const year = raw.substring(0, 4);
+      const rest = raw.split("-");
+      dateStr = `${year}-${rest[1].padStart(2,"0")}-${rest[2].substring(0,2).padStart(2,"0")}`;
     }
   }
  
