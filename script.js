@@ -249,7 +249,10 @@ function hideAllSections() {
 function showSection(key) {
   hideAllSections();
   if (sections[key]) sections[key].classList.remove("hidden");
-  if (key === "stats") setTimeout(() => renderCharts(), 100);
+  if (key === "stats") {
+    // Délai plus long pour que la section soit bien visible avant de dessiner
+    setTimeout(() => renderCharts(), 300);
+  }
   if (key === "accueil") setTimeout(() => renderHomeCharts(), 100);
   if (key === "planning") renderPlanning();
   if (key === "general") {
@@ -999,43 +1002,55 @@ const chartDefaults = {
 };
  
 function renderCharts() {
-  // Recharger les posts depuis localStorage au cas où la sync vient de se faire
+  // Recharger les posts depuis localStorage
   posts = JSON.parse(localStorage.getItem("posts")) || posts;
   destroyCharts();
-  if (posts.length === 0) {
-    document.querySelectorAll(".chart-card canvas").forEach(c => {
-      const ctx = c.getContext("2d");
-      ctx.clearRect(0, 0, c.width, c.height);
-    });
+ 
+  // Vérifier que Chart.js est bien chargé
+  if (typeof Chart === "undefined") {
+    setTimeout(() => renderCharts(), 500);
     return;
   }
+ 
+  if (posts.length === 0) return;
+ 
+  // S'assurer que la section stats est visible avant de dessiner
+  const statsSection = document.getElementById("section-stats");
+  if (!statsSection || statsSection.classList.contains("hidden")) return;
  
   // Score par jour
   const dayMap = {};
   posts.forEach(p => {
+    if (!p.jour) return;
     if (!dayMap[p.jour]) dayMap[p.jour] = { total: 0, count: 0 };
-    dayMap[p.jour].total += p.score; dayMap[p.jour].count++;
+    dayMap[p.jour].total += p.score;
+    dayMap[p.jour].count++;
   });
   const dayLabels = Object.keys(dayMap);
-  charts.day = new Chart(document.getElementById("chart-day"), {
-    type: "bar",
-    data: { labels: dayLabels, datasets: [{ data: dayLabels.map(d => dayMap[d].total/dayMap[d].count), backgroundColor: "#3b82f6", borderRadius: 6 }] },
-    options: chartDefaults
-  });
+  if (dayLabels.length > 0) {
+    charts.day = new Chart(document.getElementById("chart-day"), {
+      type: "bar",
+      data: { labels: dayLabels, datasets: [{ data: dayLabels.map(d => Math.round(dayMap[d].total/dayMap[d].count)), backgroundColor: "#3b82f6", borderRadius: 6 }] },
+      options: chartDefaults
+    });
+  }
  
   // Heures
   const hourMap = {};
   posts.forEach(p => {
-    const h = Math.floor(p.heureDecimale);
+    const h = Math.floor(p.heureDecimale || 0);
     if (!hourMap[h]) hourMap[h] = { total: 0, count: 0 };
-    hourMap[h].total += p.score; hourMap[h].count++;
+    hourMap[h].total += p.score;
+    hourMap[h].count++;
   });
   const hourLabels = Object.keys(hourMap).sort((a,b) => a-b);
-  charts.hour = new Chart(document.getElementById("chart-hour"), {
-    type: "bar",
-    data: { labels: hourLabels.map(h => h+"h"), datasets: [{ data: hourLabels.map(h => hourMap[h].total/hourMap[h].count), backgroundColor: "#8b5cf6", borderRadius: 6 }] },
-    options: chartDefaults
-  });
+  if (hourLabels.length > 0) {
+    charts.hour = new Chart(document.getElementById("chart-hour"), {
+      type: "bar",
+      data: { labels: hourLabels.map(h => h+"h"), datasets: [{ data: hourLabels.map(h => Math.round(hourMap[h].total/hourMap[h].count)), backgroundColor: "#8b5cf6", borderRadius: 6 }] },
+      options: chartDefaults
+    });
+  }
  
   // Types
   const typeMap = {};
