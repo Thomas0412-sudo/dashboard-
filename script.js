@@ -36,11 +36,19 @@ function calculateRawScore(platform, likes, comments, views) {
  
 function normalizeScores(postsArray) {
   if (postsArray.length === 0) return postsArray;
+ 
   const raws = postsArray.map(p => calculateRawScore(p.platform, p.likes, p.comments, p.views));
-  const maxRaw = Math.max(...raws, 1);
+ 
+  // Utiliser log pour réduire l'écart entre le post viral et les autres
+  const logsRaws = raws.map(r => Math.log10(r + 1));
+  const maxLog = Math.max(...logsRaws, 1);
+  const minLog = Math.min(...logsRaws);
+  const range = maxLog - minLog || 1;
+ 
   return postsArray.map((p, i) => ({
     ...p,
-    score: Math.round((raws[i] / maxRaw) * 100) / 10
+    // Score entre 1 et 10 avec distribution équilibrée
+    score: Math.round(((logsRaws[i] - minLog) / range) * 9 * 10) / 10 + 1
   }));
 }
  
