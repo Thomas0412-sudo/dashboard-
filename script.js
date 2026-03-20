@@ -19,6 +19,62 @@ function showSyncToast(message, isError = false) {
   setTimeout(() => toast.remove(), 3500);
 }
  
+/* =====================
+   SCORE ADAPTATIF PAR PLATEFORME
+===================== */
+function calculateScore(platform, likes, comments, views) {
+  const ratio = views > 0 ? (likes + comments) / views : 0;
+  let raw = 0;
+ 
+  switch ((platform || "Reddit").toLowerCase()) {
+ 
+    case "reddit":
+      // Reddit : ratio × vues = les deux comptent ensemble
+      // Un post avec 97k vues ET bon ratio écrase un post avec 1k vues et même ratio
+      raw = (ratio * views * 0.1)       // ratio × volume = le vrai viral
+          + (Math.log10(views + 1) * 30) // bonus vues brutes
+          + (comments * 8)               // commentaires très valorisés
+          + (likes * 2);                 // likes en bonus
+      break;
+ 
+    case "linkedin":
+      raw = (ratio * views * 0.1)
+          + (comments * 15)
+          + (likes * 3)
+          + (Math.log10(views + 1) * 10);
+      break;
+ 
+    case "twitter/x":
+      raw = (ratio * views * 0.1)
+          + (likes * 5)
+          + (comments * 8)
+          + (Math.log10(views + 1) * 15);
+      break;
+ 
+    case "instagram":
+      raw = (ratio * views * 0.08)
+          + (likes * 4)
+          + (comments * 10)
+          + (Math.log10(views + 1) * 20);
+      break;
+ 
+    case "tiktok":
+      raw = (Math.log10(views + 1) * 50)
+          + (ratio * views * 0.05)
+          + (likes * 2)
+          + (comments * 6);
+      break;
+ 
+    default:
+      raw = (ratio * views * 0.1)
+          + (comments * 6)
+          + (likes * 2)
+          + (Math.log10(views + 1) * 15);
+  }
+ 
+  return Math.round(raw * 10) / 10;
+}
+ 
 function convertSheetRow(row) {
   let dateStr = "";
   if (row["Date publication"]) {
@@ -65,8 +121,9 @@ function convertSheetRow(row) {
   const likes    = Number(row["Likes"]) || 0;
   const comments = Number(row["Commentaires"]) || 0;
   const views    = Number(row["Vues"]) || 0;
+  const platform = row["Plateforme"] || "Reddit";
   const engagement = likes + comments;
-  const score = views > 0 ? Math.round((engagement / views) * 10000) / 10 : 0;
+  const score = calculateScore(platform, likes, comments, views);
  
   let jour = String(row["Jour (auto)"] || "").trim();
   if (!jour && dateStr) {
@@ -111,6 +168,18 @@ async function syncFromSheets(showFeedback = true) {
     savePosts();
     renderTable();
     renderHomeCharts();
+ 
+    // Re-render les graphiques stats si la section est visible
+    const statsSection = document.getElementById("section-stats");
+    if (statsSection && !statsSection.classList.contains("hidden")) {
+      setTimeout(() => renderCharts(), 100);
+    }
+ 
+    // Re-render analyse générale si visible
+    const generalSection = document.getElementById("section-general");
+    if (generalSection && !generalSection.classList.contains("hidden")) {
+      document.getElementById("global-insights").innerHTML = generateGlobalInsights();
+    }
  
     const now = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     if (syncStatus) {
@@ -285,9 +354,11 @@ function renderTable() {
  
   emptyState && emptyState.classList.add("hidden");
  
+  const maxScore = Math.max(...posts.map(p => p.score), 1);
   posts.forEach((post, index) => {
     const row = document.createElement("tr");
-    const scoreClass = post.score > 2 ? "high" : post.score > 1 ? "mid" : "low";
+    const pct = post.score / maxScore;
+    const scoreClass = pct > 0.6 ? "high" : pct > 0.3 ? "mid" : "low";
  
     row.innerHTML = `
       <td>${post.platform}</td>
@@ -349,7 +420,7 @@ addPostBtn.addEventListener("click", () => {
  
   const engagement = likes + comments;
   const jour = new Date(date).toLocaleDateString("fr-FR", { weekday: "long" });
-  const score = views > 0 ? Math.round((engagement / views) * 10000) / 10 : 0;
+  const score = calculateScore(platform, likes, comments, views);
   const heureDecimale = Number(time.split(":")[0]) + Number(time.split(":")[1]) / 60;
  
   const newPost = { platform, date, time, author, title, likes, comments, views, engagement, jour, score, heureDecimale };
@@ -442,9 +513,11 @@ function updateStats() {
   }
  
   const avg = posts.reduce((a, b) => a + (b.score || 0), 0) / posts.length;
-  document.getElementById("avg-score").textContent = avg.toFixed(1);
+  document.getElementById("avg-score").textContent = avg.toFixed(0);
  
-  const success = (posts.filter(p => p.score > 1.5).length / posts.length) * 100;
+  const maxScore = Math.max(...posts.map(p => p.score), 1);
+  const threshold = maxScore * 0.4;
+  const success = (posts.filter(p => p.score > threshold).length / posts.length) * 100;
   document.getElementById("success-rate").textContent = success.toFixed(1) + "%";
  
   const dayStats = getBestDayStats();
@@ -1047,5 +1120,17 @@ function renderHomeCharts() {
   });
 }
  
-// Init
-renderHomeCharts();
+// Init — attendre que les données soient prêtes avant de rendre les graphiques
+function initDashboard() {
+  posts = JSON.parse(localStorage.getItem("posts")) || [];
+  renderTable();
+  renderHomeCharts();
+  document.getElementById("global-insights").innerHTML = generateGlobalInsights();
+}
+ 
+// Lancer l'init après chargement complet du DOM
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initDashboard);
+} else {
+  initDashboard();
+}
