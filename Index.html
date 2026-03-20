@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>r/jobsansfiltre — Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">r/</div>
+        <div>
+          <div class="logo-title">jobsansfiltre</div>
+          <div class="logo-sub">Dashboard Analytics</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <ul>
+          <li class="active" data-section="accueil">
+            <span class="nav-icon">⌂</span> Accueil
+          </li>
+          <li data-section="stats">
+            <span class="nav-icon">📊</span> Statistiques
+          </li>
+          <li data-section="ia">
+            <span class="nav-icon">✦</span> Analyse IA
+          </li>
+          <li data-section="general">
+            <span class="nav-icon">◈</span> Analyse générale
+          </li>
+          <li data-section="planning">
+            <span class="nav-icon">📅</span> Planning
+          </li>
+          <li data-section="donnees">
+            <span class="nav-icon">⊞</span> Données
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="sync-btn" class="btn-sync">🔄 Synchroniser</button>
+        <div id="sync-status" class="sync-status">Google Sheets</div>
+        <button id="export-csv" class="btn-export" style="margin-top:8px;">↓ Exporter CSV</button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+
+      <!-- ACCUEIL -->
+      <section class="section" id="section-accueil">
+        <div class="page-header">
+          <div>
+            <h1>Bonjour 👋</h1>
+            <p class="page-sub">Vue d'ensemble de ta communauté</p>
+          </div>
+          <div class="header-date" id="current-date"></div>
+        </div>
+
+        <div class="stats-cards">
+          <div class="stat-card" data-color="blue">
+            <div class="stat-label">Total posts</div>
+            <div class="stat-value" id="total-posts">0</div>
+            <div class="stat-trend" id="trend-posts">—</div>
+          </div>
+          <div class="stat-card" data-color="green">
+            <div class="stat-label">Score moyen</div>
+            <div class="stat-value" id="avg-score">0</div>
+            <div class="stat-trend" id="trend-score">engagement/vues</div>
+          </div>
+          <div class="stat-card" data-color="purple">
+            <div class="stat-label">Taux de réussite</div>
+            <div class="stat-value" id="success-rate">0%</div>
+            <div class="stat-trend">posts score &gt; 1.5</div>
+          </div>
+          <div class="stat-card" data-color="orange">
+            <div class="stat-label">Meilleur jour</div>
+            <div class="stat-value" id="best-day-home">—</div>
+            <div class="stat-trend">pour publier</div>
+          </div>
+        </div>
+
+        <div class="home-charts">
+          <div class="chart-card">
+            <div class="chart-title">Évolution des scores</div>
+            <canvas id="chart-home-line"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Répartition par plateforme</div>
+            <canvas id="chart-home-platform"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- STATISTIQUES -->
+      <section class="section hidden" id="section-stats">
+        <div class="page-header">
+          <div>
+            <h1>Statistiques</h1>
+            <p class="page-sub">Analyse détaillée de tes performances</p>
+          </div>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-title">Score moyen par jour</div>
+            <canvas id="chart-day"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Heures les plus performantes</div>
+            <canvas id="chart-hour"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Types de posts</div>
+            <canvas id="chart-type"></canvas>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Mots-clés les plus efficaces</div>
+            <canvas id="chart-keyword"></canvas>
+          </div>
+          <div class="chart-card wide">
+            <div class="chart-title">Évolution des scores dans le temps</div>
+            <canvas id="chart-date"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ANALYSE IA -->
+      <section class="section hidden" id="section-ia">
+        <div class="page-header">
+          <div>
+            <h1>Analyse IA <span class="badge-ai">Smart</span></h1>
+            <p class="page-sub">Analyse intelligente de tes titres basée sur les patterns Reddit</p>
+          </div>
+        </div>
+
+        <div class="ia-input-zone">
+          <textarea id="input-text" placeholder="Colle ici ton titre de post pour l'analyser..."></textarea>
+          <div class="ia-actions">
+            <button id="analyze-btn" class="btn-primary">
+              <span>✦</span> Analyser ce titre
+            </button>
+          </div>
+        </div>
+
+        <div id="ai-loading" class="ai-loading hidden">
+          <div class="loading-spinner"></div>
+          <p>Analyse en cours...</p>
+        </div>
+
+        <div id="ai-result"></div>
+      </section>
+
+      <!-- ANALYSE GÉNÉRALE -->
+      <section class="section hidden" id="section-general">
+        <div class="page-header">
+          <div>
+            <h1>Analyse générale</h1>
+            <p class="page-sub">Synthèse de toutes tes publications</p>
+          </div>
+        </div>
+        <div id="global-insights"></div>
+      </section>
+
+      <!-- PLANNING -->
+      <section class="section hidden" id="section-planning">
+        <div class="page-header">
+          <div>
+            <h1>Planning de posts</h1>
+            <p class="page-sub">Planifie tes prochaines publications au bon moment</p>
+          </div>
+        </div>
+
+        <div class="planning-grid">
+          <div class="planning-card">
+            <h3>🕐 Meilleurs créneaux</h3>
+            <div id="best-slots"></div>
+          </div>
+          <div class="planning-card">
+            <h3>📝 Générer une idée de post</h3>
+            <div class="idea-form">
+              <input type="text" id="idea-topic" placeholder="Ex: reconversion professionnelle, entretien..." />
+              <button id="generate-idea-btn" class="btn-primary">✦ Générer des idées</button>
+            </div>
+            <div id="idea-loading" class="ai-loading hidden">
+              <div class="loading-spinner"></div>
+              <p>Génération en cours...</p>
+            </div>
+            <div id="idea-result"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DONNÉES -->
+      <section class="section hidden" id="section-donnees">
+        <div class="page-header">
+          <div>
+            <h1>Données</h1>
+            <p class="page-sub">Gère et importe tes publications</p>
+          </div>
+          <button id="export-csv-2" class="btn-secondary">↓ Exporter CSV</button>
+        </div>
+
+        <div class="data-form-card">
+          <h3 id="form-title">Ajouter un post manuellement</h3>
+          <div class="data-form">
+            <select id="post-platform">
+              <option value="">Plateforme</option>
+              <option value="Reddit">Reddit</option>
+              <option value="LinkedIn">LinkedIn</option>
+              <option value="Twitter/X">Twitter/X</option>
+              <option value="Instagram">Instagram</option>
+              <option value="TikTok">TikTok</option>
+            </select>
+            <input type="date" id="post-date" />
+            <input type="time" id="post-time" />
+            <input type="text" id="post-author" placeholder="Auteur" />
+            <input type="text" id="post-title" placeholder="Titre du post" />
+            <input type="number" id="post-likes" placeholder="Likes" min="0" />
+            <input type="number" id="post-comments" placeholder="Commentaires" min="0" />
+            <input type="number" id="post-views" placeholder="Vues" min="0" />
+            <div class="form-actions">
+              <button id="add-post" class="btn-primary">Ajouter</button>
+              <button id="cancel-edit" class="btn-ghost hidden">Annuler</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Plateforme</th>
+                <th>Date</th>
+                <th>Heure</th>
+                <th>Auteur</th>
+                <th>Titre</th>
+                <th>Likes</th>
+                <th>Commentaires</th>
+                <th>Vues</th>
+                <th>Score</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="data-body"></tbody>
+          </table>
+          <div id="empty-state" class="empty-state">
+            <div class="empty-icon">📭</div>
+            <p>Aucun post pour l'instant.<br/>Clique sur <strong>🔄 Synchroniser</strong> pour importer depuis Google Sheets !</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
