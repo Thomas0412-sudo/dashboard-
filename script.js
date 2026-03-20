@@ -180,9 +180,12 @@ function hideAllSections() {
 function showSection(key) {
   hideAllSections();
   if (sections[key]) sections[key].classList.remove("hidden");
-  if (key === "stats") renderCharts();
-  if (key === "accueil") renderHomeCharts();
+  if (key === "stats") setTimeout(() => renderCharts(), 100);
+  if (key === "accueil") setTimeout(() => renderHomeCharts(), 100);
   if (key === "planning") renderPlanning();
+  if (key === "general") {
+    document.getElementById("global-insights").innerHTML = generateGlobalInsights();
+  }
 }
  
 menuItems.forEach(item => {
@@ -923,8 +926,16 @@ const chartDefaults = {
 };
  
 function renderCharts() {
+  // Recharger les posts depuis localStorage au cas où la sync vient de se faire
+  posts = JSON.parse(localStorage.getItem("posts")) || posts;
   destroyCharts();
-  if (posts.length === 0) return;
+  if (posts.length === 0) {
+    document.querySelectorAll(".chart-card canvas").forEach(c => {
+      const ctx = c.getContext("2d");
+      ctx.clearRect(0, 0, c.width, c.height);
+    });
+    return;
+  }
  
   // Score par jour
   const dayMap = {};
