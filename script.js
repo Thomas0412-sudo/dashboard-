@@ -4,9 +4,10 @@
 const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbzopku3BQfw4wqJYy35K8Tg2jXb8b3_RGFYy0CD5dwEte1EqUzpFOmg9XETgYViXK5Ulg/exec";
  
 /* =====================
-   STOCKAGE
+   VARIABLES GLOBALES
 ===================== */
 let posts = JSON.parse(localStorage.getItem("posts")) || [];
+let charts = {};
  
 function savePosts() {
   localStorage.setItem("posts", JSON.stringify(posts));
@@ -540,7 +541,7 @@ function copyTitle(el, title) {
   });
 }
  
-analyzeBtn.addEventListener("click", () => runAIAnalysis(inputText.value));
+analyzeBtn && analyzeBtn.addEventListener("click", () => runAIAnalysis(inputText.value));
  
 /* =====================
    ANALYSE GÉNÉRALE
@@ -682,7 +683,6 @@ function useIdea(title) {
 /* =====================
    GRAPHIQUES
 ===================== */
-let charts = {};
  
 function destroyCharts() {
   Object.values(charts).forEach(c => { try { c && c.destroy(); } catch(e) {} });
