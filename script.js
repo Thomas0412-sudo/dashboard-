@@ -687,20 +687,26 @@ function generateGlobalInsights() {
 }
  
 /* =====================
-   PLANNING
+   PLANNING — CALENDRIER VISUEL + GÉNÉRATEUR DE POST
 ===================== */
 function renderPlanning() {
+  renderCalendar();
+  renderBestSlots();
+}
+ 
+function renderBestSlots() {
   const slotsEl = document.getElementById("best-slots");
   if (!slotsEl) return;
-  if (posts.length < 3) { slotsEl.innerHTML = `<p style="color:var(--text-3);font-size:14px;">Ajoute au moins 3 posts pour voir tes meilleurs créneaux.</p>`; return; }
- 
+  if (posts.length < 3) {
+    slotsEl.innerHTML = `<p style="color:var(--text-3);font-size:14px;">Ajoute au moins 3 posts pour voir tes meilleurs créneaux.</p>`;
+    return;
+  }
   const slotMap = {};
   posts.forEach(p => {
     const key = `${p.jour}|${Math.floor(p.heureDecimale || 0)}`;
     if (!slotMap[key]) slotMap[key] = { day: p.jour, hour: Math.floor(p.heureDecimale || 0), total: 0, count: 0 };
     slotMap[key].total += p.score; slotMap[key].count++;
   });
- 
   const slots = Object.values(slotMap).map(s => ({ ...s, avg: s.total / s.count })).sort((a,b) => b.avg - a.avg).slice(0, 5);
   slotsEl.innerHTML = slots.map((s, i) => `
     <div class="slot-item">
@@ -710,13 +716,75 @@ function renderPlanning() {
     </div>`).join("");
 }
  
-/* =====================
-   GÉNÉRATION D'IDÉES
-===================== */
-const generateIdeaBtn = document.getElementById("generate-idea-btn");
-const ideaLoading = document.getElementById("idea-loading");
-const ideaResult = document.getElementById("idea-result");
+function renderCalendar() {
+  const calEl = document.getElementById("calendar-grid");
+  if (!calEl) return;
  
+  const jours = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
+  const heures = [8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+ 
+  // Calculer score moyen par jour+heure
+  const heatmap = {};
+  posts.forEach(p => {
+    const h = Math.floor(p.heureDecimale || 0);
+    const key = `${p.jour}|${h}`;
+    if (!heatmap[key]) heatmap[key] = { total: 0, count: 0 };
+    heatmap[key].total += p.score;
+    heatmap[key].count++;
+  });
+ 
+  const maxScore = Math.max(...Object.values(heatmap).map(v => v.total/v.count), 1);
+ 
+  let html = `
+    <div style="overflow-x:auto;">
+      <table style="border-collapse:collapse;width:100%;font-size:12px;">
+        <thead>
+          <tr>
+            <th style="padding:6px 10px;text-align:left;color:var(--text-3);font-weight:600;border-bottom:1px solid var(--border);">Heure</th>
+            ${jours.map(j => `<th style="padding:6px 8px;text-align:center;color:var(--text-3);font-weight:600;border-bottom:1px solid var(--border);min-width:80px;">${j.charAt(0).toUpperCase()+j.slice(1)}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>`;
+ 
+  heures.forEach(h => {
+    html += `<tr>`;
+    html += `<td style="padding:5px 10px;color:var(--text-3);font-family:var(--font-mono);font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap;">${h}h</td>`;
+    jours.forEach(j => {
+      const key = `${j}|${h}`;
+      const data = heatmap[key];
+      if (data) {
+        const avg = data.total / data.count;
+        const intensity = avg / maxScore;
+        const bg = intensity > 0.7 ? "#059669" : intensity > 0.4 ? "#3b82f6" : intensity > 0.2 ? "#8b5cf6" : "#e8eaf0";
+        const textColor = intensity > 0.2 ? "white" : "var(--text-3)";
+        html += `<td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--border);">
+          <div title="${j} ${h}h — score ${avg.toFixed(1)}" style="background:${bg};color:${textColor};border-radius:6px;padding:4px 2px;font-weight:700;font-size:11px;cursor:default;">${avg.toFixed(1)}</div>
+        </td>`;
+      } else {
+        html += `<td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--border);">
+          <div style="background:var(--surface-2);border-radius:6px;padding:4px 2px;color:var(--border);font-size:11px;">·</div>
+        </td>`;
+      }
+    });
+    html += `</tr>`;
+  });
+ 
+  html += `</tbody></table>
+    <div style="display:flex;gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:11px;color:var(--text-3);">Légende :</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:11px;"><span style="background:#059669;width:12px;height:12px;border-radius:3px;display:inline-block;"></span> Excellent</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:11px;"><span style="background:#3b82f6;width:12px;height:12px;border-radius:3px;display:inline-block;"></span> Bon</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:11px;"><span style="background:#8b5cf6;width:12px;height:12px;border-radius:3px;display:inline-block;"></span> Moyen</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:11px;"><span style="background:#e8eaf0;width:12px;height:12px;border-radius:3px;display:inline-block;"></span> Peu de données</span>
+    </div>
+  </div>`;
+ 
+  calEl.innerHTML = html;
+}
+ 
+/* =====================
+   GÉNÉRATEUR DE POST COMPLET
+===================== */
 const IDEES_TEMPLATES = [
   { type: "Storytelling", fn: (t) => `Le jour où ${t} a changé ma vision du recrutement`, angle: "Raconter un moment précis", pourquoi: "Le storytelling génère 2x plus de commentaires" },
   { type: "Opinion", fn: (t) => `La vérité que personne ne dit sur ${t} en France`, angle: "Prendre une position tranchée", pourquoi: "Les titres 'vérité cachée' créent une forte curiosité" },
@@ -726,8 +794,48 @@ const IDEES_TEMPLATES = [
   { type: "Storytelling", fn: (t) => `J'ai testé ${t} pendant 30 jours — voici ce qui s'est passé`, angle: "Expérience avec durée définie", pourquoi: "Le format 'j'ai testé X jours' donne une crédibilité immédiate" },
 ];
  
+function generatePostContent(titre, type, platform) {
+  const p = (platform || "Reddit").toLowerCase();
+ 
+  if (p === "reddit") {
+    switch(type) {
+      case "Question":
+        return `**${titre}**\n\nJe me pose cette question depuis un moment et j'aimerais avoir vos retours.\n\nDans mon expérience en recrutement, j'ai souvent remarqué que ce sujet divise. Certains pensent que... d'autres estiment que...\n\nEt vous, qu'est-ce que vous en pensez ? Vous avez déjà vécu ça ?\n\n*(Commentez ci-dessous, tous les avis sont les bienvenus 👇)*`;
+      case "Storytelling":
+        return `**${titre}**\n\nJe vais vous raconter quelque chose qui m'a vraiment marqué.\n\nC'était [date/contexte]. Je me retrouvais face à une situation que je n'avais pas anticipée...\n\n[Décris la situation en 2-3 phrases]\n\nCe que j'ai retenu de cette expérience :\n- Point 1\n- Point 2\n- Point 3\n\nSi vous êtes passé par là, vous savez de quoi je parle. Qu'est-ce que vous auriez fait à ma place ?`;
+      case "Opinion":
+        return `**${titre}**\n\nJe vais être direct, même si ça ne va pas plaire à tout le monde.\n\n[Ton argument principal en 2-3 phrases percutantes]\n\nVoici pourquoi je pense ça :\n\n1. **Argument 1** — [explication]\n2. **Argument 2** — [explication]\n3. **Argument 3** — [explication]\n\nJe suis curieux de savoir ce que vous en pensez. Suis-je le seul à voir les choses ainsi ?`;
+      default:
+        return `**${titre}**\n\nVoici ce que j'ai appris sur ce sujet après [X] ans dans le recrutement.\n\n**Ce qui fonctionne vraiment :**\n- Conseil 1\n- Conseil 2\n- Conseil 3\n\n**Ce qu'il faut éviter :**\n- Erreur 1\n- Erreur 2\n\nN'hésitez pas à partager vos propres expériences en commentaires ! 👇`;
+    }
+  }
+ 
+  if (p === "linkedin") {
+    switch(type) {
+      case "Question":
+        return `${titre}\n\n↓ Ma réflexion après [X] ans dans le recrutement :\n\nNous parlons souvent de [sujet] mais rarement de ce qui se passe vraiment derrière les coulisses.\n\nJ'ai accompagné des centaines de candidats et recruteurs, et ce que j'observe c'est que...\n\n🔹 Point 1\n🔹 Point 2  \n🔹 Point 3\n\nEt vous, quelle est votre expérience sur ce sujet ?\n\n#Recrutement #RH #Emploi #JobSansFiltre`;
+      case "Storytelling":
+        return `${titre}\n\nUne histoire vraie qui m'a appris beaucoup.\n\n[Contexte en 1-2 phrases]\n\nCe jour-là, j'ai compris que :\n→ Leçon 1\n→ Leçon 2\n→ Leçon 3\n\nLe recrutement, c'est avant tout une affaire humaine.\n\nQu'est-ce qui vous a le plus marqué dans votre parcours professionnel ?\n\n#Recrutement #CarrièrePro #RH #Emploi`;
+      default:
+        return `${titre}\n\n3 choses que j'aurais aimé savoir plus tôt :\n\n1️⃣ Point 1\n\n2️⃣ Point 2\n\n3️⃣ Point 3\n\nCe que la plupart des gens ignorent, c'est que [insight clé].\n\nSauvegardez ce post si vous le trouvez utile 🔖\n\n#Recrutement #ConseilsRH #Emploi #JobSansFiltre`;
+    }
+  }
+ 
+  if (p === "twitter/x") {
+    return `${titre}\n\nThread 🧵\n\n1/ [Point principal]\n\n2/ [Développement]\n\n3/ [Exemple concret]\n\n4/ [Conclusion + question]\n\nRT si vous êtes d'accord 👇`;
+  }
+ 
+  // Défaut
+  return `${titre}\n\n[Développe ton idée ici en restant authentique et direct — c'est ce qui fonctionne le mieux sur ${platform}]`;
+}
+ 
+const generateIdeaBtn = document.getElementById("generate-idea-btn");
+const ideaLoading = document.getElementById("idea-loading");
+const ideaResult = document.getElementById("idea-result");
+ 
 generateIdeaBtn && generateIdeaBtn.addEventListener("click", () => {
   const topic = document.getElementById("idea-topic").value.trim();
+  const platform = document.getElementById("idea-platform")?.value || "Reddit";
   if (!topic) { alert("Entre un sujet."); return; }
   ideaLoading.classList.remove("hidden");
   ideaResult.innerHTML = "";
@@ -736,16 +844,33 @@ generateIdeaBtn && generateIdeaBtn.addEventListener("click", () => {
     const shuffled = [...IDEES_TEMPLATES].sort(() => Math.random() - 0.5).slice(0, 3);
     ideaResult.innerHTML = shuffled.map(tpl => {
       const titre = tpl.fn(topic);
-      return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;">
+      const postContent = generatePostContent(titre, tpl.type, platform);
+      const escapedContent = postContent.replace(/`/g, "\\`").replace(/\$/g, "\\$");
+      return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
         <div style="font-weight:700;font-size:14px;margin-bottom:6px;">📌 ${titre}</div>
-        <div style="font-size:12px;color:var(--blue);font-weight:600;margin-bottom:4px;">${tpl.type}</div>
-        <div style="font-size:13px;color:var(--text-2);margin-bottom:4px;">💡 ${tpl.angle}</div>
-        <div style="font-size:12px;color:var(--green);">✓ ${tpl.pourquoi}</div>
-        <button onclick="useIdea('${titre.replace(/'/g,"\\'")}'')" style="margin-top:10px;background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-mid);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;">Analyser ce titre →</button>
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+          <span style="font-size:11px;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:20px;font-weight:600;">${tpl.type}</span>
+          <span style="font-size:11px;background:var(--surface);color:var(--text-3);padding:2px 8px;border-radius:20px;border:1px solid var(--border);">${platform}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:4px;">💡 ${tpl.angle}</div>
+        <div style="font-size:12px;color:var(--green);margin-bottom:12px;">✓ ${tpl.pourquoi}</div>
+        <details style="margin-bottom:10px;">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--blue);user-select:none;">✍️ Voir le post généré</summary>
+          <div style="margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;color:var(--text-2);white-space:pre-wrap;font-family:var(--font);">${postContent}</div>
+          <button onclick="copyPost(this, \`${escapedContent}\`)" style="margin-top:8px;background:var(--green-light);color:var(--green);border:1px solid var(--green);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);font-weight:600;">📋 Copier le post</button>
+        </details>
+        <button onclick="useIdea('${titre.replace(/'/g,"\\'")}'')" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-mid);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);">Analyser ce titre →</button>
       </div>`;
     }).join("");
   }, 500);
 });
+ 
+function copyPost(btn, content) {
+  navigator.clipboard.writeText(content).then(() => {
+    btn.textContent = "✅ Copié !";
+    setTimeout(() => { btn.textContent = "📋 Copier le post"; }, 2000);
+  });
+}
  
 function useIdea(title) {
   menuItems.forEach(i => i.classList.remove("active"));
