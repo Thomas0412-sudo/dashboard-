@@ -198,8 +198,33 @@ function detectPostType(title) {
 }
  
 function extractKeywords(title) {
-  const stopwords = ["pour", "dans", "avec", "cette", "sans", "mais", "plus", "très", "tout", "aussi", "bien", "après", "même"];
-  return title.toLowerCase().replace(/[.,!?…:;«»"'()]/g, " ").split(/\s+/).filter(w => w.length >= 4 && !stopwords.includes(w));
+  const stopwords = [
+    // Articles et déterminants
+    "pour", "dans", "avec", "cette", "sans", "mais", "plus", "très", "tout", "aussi",
+    "bien", "après", "même", "comme", "dont", "être", "avoir", "faire", "dire",
+    "aller", "voir", "vouloir", "pouvoir", "devoir", "savoir", "votre", "notre",
+    "leurs", "leur", "nous", "vous", "ils", "elle", "elles", "nous", "cela", "ceci",
+    "quand", "alors", "donc", "mais", "ainsi", "encore", "toujours", "jamais",
+    "déjà", "vraiment", "trop", "moins", "plus", "assez", "enfin", "depuis",
+    "pendant", "avant", "après", "entre", "contre", "vers", "sous", "chez",
+    "donne", "comme", "rester", "envie", "chose", "faire", "prend", "faut",
+    "avoir", "être", "quel", "quelle", "quels", "quelles", "quel",
+    "une", "les", "des", "que", "qui", "quoi", "comment", "quand", "pourquoi",
+    "parce", "selon", "dont", "lors", "puis", "tout", "tous", "toute", "toutes",
+    "voilà", "voici", "chez", "part", "fois", "coup", "bout", "aide", "fait",
+    "mise", "mise", "pris", "doit", "peut", "fais", "dites", "dits"
+  ];
+ 
+  return title
+    .toLowerCase()
+    .replace(/[.,!?…:;«»"'()[\]{}\/\\]/g, " ")
+    .split(/\s+/)
+    .filter(w =>
+      w.length >= 5 &&                    // Au moins 5 caractères
+      !stopwords.includes(w) &&           // Pas un mot vide
+      !/^\d+$/.test(w) &&                // Pas un nombre seul
+      !/^(https?|www)/.test(w)           // Pas une URL
+    );
 }
  
 function getBestDayStats() {
@@ -557,6 +582,7 @@ analyzeBtn && analyzeBtn.addEventListener("click", () => runAIAnalysis(inputText
 function generateGlobalInsights() {
   if (posts.length === 0) return `<div class="ai-card"><p style="color:var(--text-3)">Aucune donnée. Clique sur <strong>🔄 Synchroniser</strong>.</p></div>`;
  
+  // Performance par type
   const typeScores = {};
   posts.forEach(p => {
     const type = detectPostType(p.title);
@@ -564,57 +590,97 @@ function generateGlobalInsights() {
     typeScores[type].total += p.score; typeScores[type].count++;
   });
  
-  const keywordScores = {};
+  // Mots-clés — avec score moyen ET nombre d'occurrences minimum
+  const keywordMap = {};
   posts.forEach(p => {
-    extractKeywords(p.title).forEach(k => {
-      if (!keywordScores[k]) keywordScores[k] = { total: 0, count: 0 };
-      keywordScores[k].total += p.score; keywordScores[k].count++;
+    const keywords = extractKeywords(p.title);
+    // Dédoublonner par post pour éviter qu'un seul post viral fausse tout
+    const unique = [...new Set(keywords)];
+    unique.forEach(k => {
+      if (!keywordMap[k]) keywordMap[k] = { totalScore: 0, count: 0, posts: [] };
+      keywordMap[k].totalScore += p.score;
+      keywordMap[k].count++;
+      keywordMap[k].posts.push(p.score);
     });
   });
  
-  const sortedKeywords = Object.keys(keywordScores)
-    .sort((a,b) => (keywordScores[b].total/keywordScores[b].count) - (keywordScores[a].total/keywordScores[a].count))
+  // Filtrer : au moins 2 occurrences pour être significatif
+  const validKeywords = Object.keys(keywordMap).filter(k => keywordMap[k].count >= 2);
+ 
+  // Top 5 mots qui performent le mieux (score moyen élevé)
+  const topKeywords = validKeywords
+    .sort((a,b) => (keywordMap[b].totalScore/keywordMap[b].count) - (keywordMap[a].totalScore/keywordMap[a].count))
+    .slice(0, 5);
+ 
+  // Bottom 5 mots à éviter (score moyen faible)
+  const weakKeywords = validKeywords
+    .sort((a,b) => (keywordMap[a].totalScore/keywordMap[a].count) - (keywordMap[b].totalScore/keywordMap[b].count))
     .slice(0, 5);
  
   const dayStats = getBestDayStats();
   const hourStats = getBestHourStats();
-  const bestType = Object.keys(typeScores).sort((a,b) => (typeScores[b].total/typeScores[b].count) - (typeScores[a].total/typeScores[a].count))[0];
+  const bestType = Object.keys(typeScores).sort((a,b) =>
+    (typeScores[b].total/typeScores[b].count) - (typeScores[a].total/typeScores[a].count)
+  )[0];
  
   return `
     <div class="insights-grid">
       <div class="ai-card">
         <h3>📊 Performance par type</h3>
-        ${Object.keys(typeScores).map(t => `
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        ${Object.keys(typeScores)
+          .sort((a,b) => (typeScores[b].total/typeScores[b].count) - (typeScores[a].total/typeScores[a].count))
+          .map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
             <span style="font-size:14px;">${t}</span>
-            <span style="font-family:var(--font-mono);font-weight:700;color:var(--blue);">${(typeScores[t].total/typeScores[t].count).toFixed(1)}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:11px;color:var(--text-3);">${typeScores[t].count} posts</span>
+              <span style="font-family:var(--font-mono);font-weight:700;color:var(--blue);">${(typeScores[t].total/typeScores[t].count).toFixed(1)}</span>
+            </div>
           </div>`).join("")}
       </div>
+ 
       <div class="ai-card">
-        <h3>🏷️ Mots-clés efficaces</h3>
-        <div class="tag-list" style="margin-bottom:8px;">${sortedKeywords.map(k => `<span class="tag">${k}</span>`).join("")}</div>
-        ${sortedKeywords.map(k => `
+        <h3>🏷️ Mots-clés qui boostent</h3>
+        <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Présents dans min. 2 posts performants</p>
+        <div class="tag-list" style="margin-bottom:10px;">
+          ${topKeywords.map(k => `<span class="tag">${k}</span>`).join("") || "<span style='color:var(--text-3);font-size:13px;'>Pas assez de données</span>"}
+        </div>
+        ${topKeywords.map(k => `
           <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-            <span>${k}</span>
-            <span style="font-family:var(--font-mono);font-weight:600;color:var(--blue);">${(keywordScores[k].total/keywordScores[k].count).toFixed(1)}</span>
+            <span style="color:var(--text-2);">${k} <span style="color:var(--text-3);font-size:11px;">(${keywordMap[k].count}x)</span></span>
+            <span style="font-family:var(--font-mono);font-weight:600;color:var(--green);">↑ ${(keywordMap[k].totalScore/keywordMap[k].count).toFixed(1)}</span>
           </div>`).join("")}
       </div>
+ 
+      <div class="ai-card">
+        <h3>⚠️ Mots-clés à éviter</h3>
+        <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Associés aux posts les moins performants</p>
+        ${weakKeywords.map(k => `
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+            <span style="color:var(--text-2);">${k} <span style="color:var(--text-3);font-size:11px;">(${keywordMap[k].count}x)</span></span>
+            <span style="font-family:var(--font-mono);font-weight:600;color:var(--red);">↓ ${(keywordMap[k].totalScore/keywordMap[k].count).toFixed(1)}</span>
+          </div>`).join("")}
+      </div>
+ 
       <div class="ai-card">
         <h3>📅 Meilleur jour</h3>
-        <div style="font-size:24px;font-weight:700;">${dayStats ? dayStats.bestDay : "—"}</div>
-        <div style="font-size:13px;color:var(--text-3);">Score moyen : ${dayStats ? dayStats.bestAvg.toFixed(1) : "—"}</div>
+        <div style="font-size:28px;font-weight:700;margin-bottom:4px;">${dayStats ? dayStats.bestDay : "—"}</div>
+        <div style="font-size:13px;color:var(--text-3);">Score moyen : <strong>${dayStats ? dayStats.bestAvg.toFixed(1) : "—"}</strong></div>
       </div>
+ 
       <div class="ai-card">
         <h3>⏰ Meilleure heure</h3>
-        <div style="font-size:24px;font-weight:700;font-family:var(--font-mono);">${hourStats ? hourStats.bestHour + "h" : "—"}</div>
-        <div style="font-size:13px;color:var(--text-3);">Score moyen : ${hourStats ? hourStats.bestAvg.toFixed(1) : "—"}</div>
+        <div style="font-size:28px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;">${hourStats ? hourStats.bestHour + "h" : "—"}</div>
+        <div style="font-size:13px;color:var(--text-3);">Score moyen : <strong>${hourStats ? hourStats.bestAvg.toFixed(1) : "—"}</strong></div>
       </div>
+ 
       <div class="ai-card" style="grid-column:span 2;">
-        <h3>🧠 Synthèse</h3>
-        <p style="font-size:15px;line-height:1.7;">
-          Tes posts de type <strong>${bestType}</strong> sont les plus performants.
+        <h3>🧠 Synthèse stratégique</h3>
+        <p style="font-size:15px;line-height:1.8;">
+          Tes posts de type <strong>${bestType}</strong> sont les plus performants (score moyen <strong>${(typeScores[bestType]?.total/typeScores[bestType]?.count).toFixed(1)}</strong>).
           Publie de préférence le <strong>${dayStats ? dayStats.bestDay : "?"}</strong> vers <strong>${hourStats ? hourStats.bestHour + "h" : "?"}</strong>.
-          ${sortedKeywords.length ? `Les mots-clés <strong>${sortedKeywords.slice(0,2).join("</strong> et <strong>")}</strong> génèrent les meilleurs scores.` : ""}
+          ${topKeywords.length >= 2 ? `Les mots <strong>${topKeywords.slice(0,3).join("</strong>, <strong>")}</strong> sont associés à tes meilleurs posts.` : ""}
+          ${weakKeywords.length >= 2 ? `Évite les titres avec <strong>${weakKeywords.slice(0,2).join("</strong> et <strong>")}</strong> qui performent moins bien.` : ""}
         </p>
       </div>
     </div>`;
