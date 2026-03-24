@@ -78,7 +78,7 @@
           <div class="stat-card" data-color="purple">
             <div class="stat-label">Taux de réussite</div>
             <div class="stat-value" id="success-rate">0%</div>
-            <div class="stat-trend">posts score &gt; 1.5</div>
+            <div class="stat-trend">posts score ≥ 5</div>
           </div>
           <div class="stat-card" data-color="orange">
             <div class="stat-label">Meilleur jour</div>
@@ -174,20 +174,33 @@
         <div class="page-header">
           <div>
             <h1>Planning de posts</h1>
-            <p class="page-sub">Planifie tes prochaines publications au bon moment</p>
+            <p class="page-sub">Calendrier de performance et générateur de posts</p>
           </div>
+        </div>
+
+        <!-- CALENDRIER HEATMAP -->
+        <div class="chart-card" style="margin-bottom:20px;">
+          <div class="chart-title">🗓️ Heatmap — Meilleurs créneaux pour publier</div>
+          <div id="calendar-grid"></div>
         </div>
 
         <div class="planning-grid">
           <div class="planning-card">
-            <h3>🕐 Meilleurs créneaux</h3>
+            <h3>🕐 Top 5 créneaux</h3>
             <div id="best-slots"></div>
           </div>
           <div class="planning-card">
-            <h3>📝 Générer une idée de post</h3>
+            <h3>✍️ Générer un post complet</h3>
             <div class="idea-form">
-              <input type="text" id="idea-topic" placeholder="Ex: reconversion professionnelle, entretien..." />
-              <button id="generate-idea-btn" class="btn-primary">✦ Générer des idées</button>
+              <select id="idea-platform" style="padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px;background:var(--surface-2);color:var(--text);outline:none;">
+                <option value="Reddit">Reddit</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="Twitter/X">Twitter/X</option>
+                <option value="Instagram">Instagram</option>
+                <option value="TikTok">TikTok</option>
+              </select>
+              <input type="text" id="idea-topic" placeholder="Ex: salaire, entretien, reconversion..." />
+              <button id="generate-idea-btn" class="btn-primary">✦ Générer des idées + posts</button>
             </div>
             <div id="idea-loading" class="ai-loading hidden">
               <div class="loading-spinner"></div>
