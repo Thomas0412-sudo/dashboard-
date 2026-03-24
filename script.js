@@ -1,3 +1,6 @@
+
+Copier
+
 /* =====================
    CONFIG GOOGLE SHEETS
 ===================== */
@@ -283,9 +286,16 @@ function renderTable() {
     const row = document.createElement("tr");
     const pct = post.score / 10;
     const scoreClass = pct > 0.6 ? "high" : pct > 0.3 ? "mid" : "low";
+ 
+    // Formater la date en jj/mm/aaaa
+    let dateDisplay = post.date;
+    if (post.date && post.date.match(/^\d{4}-\d{2}-\d{2}/)) {
+      const parts = post.date.split("-");
+      dateDisplay = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
     row.innerHTML = `
       <td>${post.platform}</td>
-      <td>${post.date}</td>
+      <td>${dateDisplay}</td>
       <td>${post.time}</td>
       <td>${post.author}</td>
       <td title="${post.title}">${post.title}</td>
