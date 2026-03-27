@@ -790,91 +790,138 @@ function renderCalendar() {
 }
  
 /* =====================
-   GÉNÉRATEUR DE POST COMPLET
+   GÉNÉRATEUR DE POST AVEC API REDDIT
 ===================== */
 const IDEES_TEMPLATES = [
-  { type: "Storytelling", fn: (t) => `Le jour où ${t} a changé ma vision du recrutement`, angle: "Raconter un moment précis", pourquoi: "Le storytelling génère 2x plus de commentaires" },
-  { type: "Opinion", fn: (t) => `La vérité que personne ne dit sur ${t} en France`, angle: "Prendre une position tranchée", pourquoi: "Les titres 'vérité cachée' créent une forte curiosité" },
-  { type: "Question", fn: (t) => `${t} : vous avez vraiment vécu ça vous aussi ?`, angle: "Inviter la communauté à partager", pourquoi: "Les questions personnelles explosent en commentaires" },
-  { type: "Conseil", fn: (t) => `Comment j'ai géré ${t} (et ce que j'aurais dû faire)`, angle: "Retour d'expérience avec leçon", pourquoi: "Le format 'ce que j'aurais dû faire' est très partageable" },
-  { type: "Opinion", fn: (t) => `${t} en 2026 : le système est cassé et voilà pourquoi`, angle: "Dénoncer un dysfonctionnement", pourquoi: "Les posts 'système cassé' génèrent beaucoup d'upvotes" },
-  { type: "Storytelling", fn: (t) => `J'ai testé ${t} pendant 30 jours — voici ce qui s'est passé`, angle: "Expérience avec durée définie", pourquoi: "Le format 'j'ai testé X jours' donne une crédibilité immédiate" },
+  { type: "Storytelling", fn: (t, inspo) => `Le jour où ${inspo || t} a tout changé`, angle: "Raconter un moment précis et personnel", pourquoi: "Le storytelling génère 2x plus de commentaires" },
+  { type: "Opinion", fn: (t, inspo) => `La vérité que personne ne dit sur ${t}`, angle: "Prendre une position tranchée", pourquoi: "Les titres 'vérité cachée' créent une forte curiosité" },
+  { type: "Question", fn: (t, inspo) => `${inspo || t} : vous avez vraiment vécu ça ?`, angle: "Inviter la communauté à partager", pourquoi: "Les questions personnelles explosent en commentaires" },
+  { type: "Conseil", fn: (t, inspo) => `Comment j'ai géré ${t} (ce que j'aurais dû faire)`, angle: "Retour d'expérience avec leçon concrète", pourquoi: "Le format 'ce que j'aurais dû faire' est très partageable" },
+  { type: "Opinion", fn: (t, inspo) => `${t} en 2026 : le système est cassé`, angle: "Dénoncer un dysfonctionnement réel", pourquoi: "Les posts 'système cassé' génèrent beaucoup d'upvotes" },
+  { type: "Storytelling", fn: (t, inspo) => `J'ai testé ${t} pendant 30 jours — résultat`, angle: "Expérience avec durée définie et résultat", pourquoi: "Le format 'j'ai testé X jours' donne une crédibilité immédiate" },
 ];
  
-function generatePostContent(titre, type, platform) {
+function generatePostContent(titre, type, platform, redditInspo) {
   const p = (platform || "Reddit").toLowerCase();
+  const inspoBlock = redditInspo ? `\n\n💡 *Inspiré de posts viraux sur Reddit (${redditInspo.score} upvotes)*` : "";
  
   if (p === "reddit") {
     switch(type) {
       case "Question":
-        return `**${titre}**\n\nJe me pose cette question depuis un moment et j'aimerais avoir vos retours.\n\nDans mon expérience en recrutement, j'ai souvent remarqué que ce sujet divise. Certains pensent que... d'autres estiment que...\n\nEt vous, qu'est-ce que vous en pensez ? Vous avez déjà vécu ça ?\n\n*(Commentez ci-dessous, tous les avis sont les bienvenus 👇)*`;
+        return `**${titre}**\n\nJe me pose cette question depuis un moment et j'aimerais avoir vos retours.\n\nDans mon expérience, j'ai souvent remarqué que ce sujet divise. Certains pensent que... d'autres estiment que...\n\nEt vous, qu'est-ce que vous en pensez ? Vous avez déjà vécu ça ?\n\n*(Commentez ci-dessous 👇)*${inspoBlock}`;
       case "Storytelling":
-        return `**${titre}**\n\nJe vais vous raconter quelque chose qui m'a vraiment marqué.\n\nC'était [date/contexte]. Je me retrouvais face à une situation que je n'avais pas anticipée...\n\n[Décris la situation en 2-3 phrases]\n\nCe que j'ai retenu de cette expérience :\n- Point 1\n- Point 2\n- Point 3\n\nSi vous êtes passé par là, vous savez de quoi je parle. Qu'est-ce que vous auriez fait à ma place ?`;
+        return `**${titre}**\n\nJe vais vous raconter quelque chose qui m'a vraiment marqué.\n\nC'était [date/contexte]. Je me retrouvais face à une situation que je n'avais pas anticipée...\n\n[Décris la situation en 2-3 phrases]\n\nCe que j'ai retenu :\n- Point 1\n- Point 2\n- Point 3\n\nSi vous êtes passé par là, vous savez de quoi je parle. Qu'auriez-vous fait à ma place ?${inspoBlock}`;
       case "Opinion":
-        return `**${titre}**\n\nJe vais être direct, même si ça ne va pas plaire à tout le monde.\n\n[Ton argument principal en 2-3 phrases percutantes]\n\nVoici pourquoi je pense ça :\n\n1. **Argument 1** — [explication]\n2. **Argument 2** — [explication]\n3. **Argument 3** — [explication]\n\nJe suis curieux de savoir ce que vous en pensez. Suis-je le seul à voir les choses ainsi ?`;
+        return `**${titre}**\n\nJe vais être direct, même si ça ne va pas plaire à tout le monde.\n\n[Ton argument principal en 2-3 phrases percutantes]\n\nVoici pourquoi :\n\n1. **Argument 1** — [explication]\n2. **Argument 2** — [explication]\n3. **Argument 3** — [explication]\n\nSuis-je le seul à voir les choses ainsi ?${inspoBlock}`;
       default:
-        return `**${titre}**\n\nVoici ce que j'ai appris sur ce sujet après [X] ans dans le recrutement.\n\n**Ce qui fonctionne vraiment :**\n- Conseil 1\n- Conseil 2\n- Conseil 3\n\n**Ce qu'il faut éviter :**\n- Erreur 1\n- Erreur 2\n\nN'hésitez pas à partager vos propres expériences en commentaires ! 👇`;
+        return `**${titre}**\n\nVoici ce que j'ai appris sur ce sujet.\n\n**Ce qui fonctionne vraiment :**\n- Conseil 1\n- Conseil 2\n- Conseil 3\n\n**Ce qu'il faut éviter :**\n- Erreur 1\n- Erreur 2\n\nPartagez vos expériences en commentaires ! 👇${inspoBlock}`;
     }
   }
  
   if (p === "linkedin") {
     switch(type) {
       case "Question":
-        return `${titre}\n\n↓ Ma réflexion après [X] ans dans le recrutement :\n\nNous parlons souvent de [sujet] mais rarement de ce qui se passe vraiment derrière les coulisses.\n\nJ'ai accompagné des centaines de candidats et recruteurs, et ce que j'observe c'est que...\n\n🔹 Point 1\n🔹 Point 2  \n🔹 Point 3\n\nEt vous, quelle est votre expérience sur ce sujet ?\n\n#Recrutement #RH #Emploi #JobSansFiltre`;
+        return `${titre}\n\n↓ Ma réflexion :\n\nNous parlons souvent de ce sujet mais rarement de ce qui se passe vraiment.\n\n🔹 Point 1\n🔹 Point 2\n🔹 Point 3\n\nEt vous, quelle est votre expérience ?\n\n#Recrutement #RH #Emploi #JobSansFiltre${inspoBlock}`;
       case "Storytelling":
-        return `${titre}\n\nUne histoire vraie qui m'a appris beaucoup.\n\n[Contexte en 1-2 phrases]\n\nCe jour-là, j'ai compris que :\n→ Leçon 1\n→ Leçon 2\n→ Leçon 3\n\nLe recrutement, c'est avant tout une affaire humaine.\n\nQu'est-ce qui vous a le plus marqué dans votre parcours professionnel ?\n\n#Recrutement #CarrièrePro #RH #Emploi`;
+        return `${titre}\n\nUne histoire vraie qui m'a appris beaucoup.\n\n[Contexte en 1-2 phrases]\n\nCe jour-là, j'ai compris que :\n→ Leçon 1\n→ Leçon 2\n→ Leçon 3\n\nQu'est-ce qui vous a le plus marqué dans votre parcours ?\n\n#Recrutement #CarrièrePro #RH${inspoBlock}`;
       default:
-        return `${titre}\n\n3 choses que j'aurais aimé savoir plus tôt :\n\n1️⃣ Point 1\n\n2️⃣ Point 2\n\n3️⃣ Point 3\n\nCe que la plupart des gens ignorent, c'est que [insight clé].\n\nSauvegardez ce post si vous le trouvez utile 🔖\n\n#Recrutement #ConseilsRH #Emploi #JobSansFiltre`;
+        return `${titre}\n\n3 choses que j'aurais aimé savoir plus tôt :\n\n1️⃣ Point 1\n\n2️⃣ Point 2\n\n3️⃣ Point 3\n\nSauvegardez ce post si utile 🔖\n\n#Recrutement #ConseilsRH #Emploi${inspoBlock}`;
     }
   }
  
   if (p === "twitter/x") {
-    return `${titre}\n\nThread 🧵\n\n1/ [Point principal]\n\n2/ [Développement]\n\n3/ [Exemple concret]\n\n4/ [Conclusion + question]\n\nRT si vous êtes d'accord 👇`;
+    return `${titre}\n\nThread 🧵\n\n1/ [Point principal]\n2/ [Développement]\n3/ [Exemple concret]\n4/ [Conclusion + question]\n\nRT si vous êtes d'accord 👇${inspoBlock}`;
   }
  
-  // Défaut
-  return `${titre}\n\n[Développe ton idée ici en restant authentique et direct — c'est ce qui fonctionne le mieux sur ${platform}]`;
+  return `${titre}\n\n[Développe ton idée ici en restant authentique et direct]${inspoBlock}`;
+}
+ 
+async function fetchRedditInspo(topic, subreddit) {
+  try {
+    const sub = subreddit || "jobsansfiltre";
+    const url = `${SHEETS_API_URL}?action=reddit&subreddit=${encodeURIComponent(sub)}&filter=top&limit=10`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const json = await response.json();
+    if (!json.success || !json.data || json.data.length === 0) return null;
+ 
+    // Trouver les posts les plus pertinents par rapport au topic
+    const topicWords = topic.toLowerCase().split(" ");
+    const relevant = json.data.filter(p =>
+      topicWords.some(w => w.length > 3 && p.title.toLowerCase().includes(w))
+    );
+ 
+    const pool = relevant.length > 0 ? relevant : json.data;
+    const best = pool.sort((a, b) => b.score - a.score).slice(0, 3);
+    return best;
+  } catch(e) {
+    console.log("Reddit API not available, using local generation");
+    return null;
+  }
 }
  
 const generateIdeaBtn = document.getElementById("generate-idea-btn");
 const ideaLoading = document.getElementById("idea-loading");
 const ideaResult = document.getElementById("idea-result");
  
-generateIdeaBtn && generateIdeaBtn.addEventListener("click", () => {
+generateIdeaBtn && generateIdeaBtn.addEventListener("click", async () => {
   const topic = document.getElementById("idea-topic").value.trim();
   const platform = document.getElementById("idea-platform")?.value || "Reddit";
+  const subreddit = document.getElementById("idea-subreddit")?.value.trim() || "jobsansfiltre";
   if (!topic) { alert("Entre un sujet."); return; }
+ 
   ideaLoading.classList.remove("hidden");
   ideaResult.innerHTML = "";
-  setTimeout(() => {
-    ideaLoading.classList.add("hidden");
-    const shuffled = [...IDEES_TEMPLATES].sort(() => Math.random() - 0.5).slice(0, 3);
  
-    // Stocker les contenus dans un objet global pour éviter les problèmes d'échappement
-    window._postContents = {};
+  // Chercher l'inspiration Reddit en parallèle
+  const redditPosts = await fetchRedditInspo(topic, subreddit);
  
-    ideaResult.innerHTML = shuffled.map((tpl, idx) => {
-      const titre = tpl.fn(topic);
-      const postContent = generatePostContent(titre, tpl.type, platform);
-      window._postContents[idx] = postContent;
+  ideaLoading.classList.add("hidden");
  
-      return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
-        <div style="font-weight:700;font-size:14px;margin-bottom:6px;">📌 ${titre}</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
-          <span style="font-size:11px;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:20px;font-weight:600;">${tpl.type}</span>
-          <span style="font-size:11px;background:var(--surface);color:var(--text-3);padding:2px 8px;border-radius:20px;border:1px solid var(--border);">${platform}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text-2);margin-bottom:4px;">💡 ${tpl.angle}</div>
-        <div style="font-size:12px;color:var(--green);margin-bottom:12px;">✓ ${tpl.pourquoi}</div>
-        <details style="margin-bottom:10px;">
-          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--blue);user-select:none;">✍️ Voir le post généré</summary>
-          <div style="margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;color:var(--text-2);white-space:pre-wrap;font-family:var(--font);">${postContent.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
-          <button onclick="copyPost(this, ${idx})" style="margin-top:8px;background:var(--green-light);color:var(--green);border:1px solid var(--green);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);font-weight:600;">📋 Copier le post</button>
-        </details>
-        <button onclick="useIdea('${titre.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-mid);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);">Analyser ce titre →</button>
+  const shuffled = [...IDEES_TEMPLATES].sort(() => Math.random() - 0.5).slice(0, 3);
+  window._postContents = {};
+ 
+  // Afficher les posts Reddit qui ont inspiré si disponibles
+  let redditInspoHtml = "";
+  if (redditPosts && redditPosts.length > 0) {
+    redditInspoHtml = `
+      <div style="background:var(--orange-light);border:1px solid #fed7aa;border-radius:var(--radius);padding:14px;margin-bottom:16px;">
+        <div style="font-weight:700;font-size:13px;color:var(--orange);margin-bottom:8px;">🔥 Top posts viraux sur r/${subreddit} pour t'inspirer</div>
+        ${redditPosts.map(p => `
+          <div style="padding:6px 0;border-bottom:1px solid #fed7aa;font-size:12px;">
+            <div style="font-weight:600;color:var(--text);margin-bottom:2px;">${p.title}</div>
+            <div style="color:var(--text-3);">⬆️ ${p.score} upvotes · 💬 ${p.num_comments} commentaires · ${p.created}</div>
+          </div>`).join("")}
+        <p style="font-size:11px;color:var(--orange);margin-top:8px;">✨ Les posts ci-dessous sont originaux et inspirés de ces tendances</p>
       </div>`;
-    }).join("");
-  }, 500);
+  }
+ 
+  ideaResult.innerHTML = redditInspoHtml + shuffled.map((tpl, idx) => {
+    const inspo = redditPosts && redditPosts[idx] ? { score: redditPosts[idx].score, title: redditPosts[idx].title } : null;
+ 
+    // Extraire un angle du titre Reddit viral pour enrichir le post
+    const inspoKeyword = inspo ? inspo.title.split(" ").filter(w => w.length > 4)[0] : null;
+    const titre = tpl.fn(topic, inspoKeyword);
+    const postContent = generatePostContent(titre, tpl.type, platform, inspo);
+    window._postContents[idx] = postContent;
+ 
+    return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px;">📌 ${titre}</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:11px;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:20px;font-weight:600;">${tpl.type}</span>
+        <span style="font-size:11px;background:var(--surface);color:var(--text-3);padding:2px 8px;border-radius:20px;border:1px solid var(--border);">${platform}</span>
+        ${inspo ? `<span style="font-size:11px;background:var(--orange-light);color:var(--orange);padding:2px 8px;border-radius:20px;">🔥 Inspiré de ${inspo.score} upvotes</span>` : ""}
+      </div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:4px;">💡 ${tpl.angle}</div>
+      <div style="font-size:12px;color:var(--green);margin-bottom:12px;">✓ ${tpl.pourquoi}</div>
+      <details style="margin-bottom:10px;">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--blue);user-select:none;">✍️ Voir le post généré</summary>
+        <div style="margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;color:var(--text-2);white-space:pre-wrap;font-family:var(--font);">${postContent.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+        <button onclick="copyPost(this,${idx})" style="margin-top:8px;background:var(--green-light);color:var(--green);border:1px solid var(--green);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);font-weight:600;">📋 Copier le post</button>
+      </details>
+      <button onclick="useIdea('${titre.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-mid);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);">Analyser ce titre →</button>
+    </div>`;
+  }).join("");
 });
  
 function copyPost(btn, idx) {
