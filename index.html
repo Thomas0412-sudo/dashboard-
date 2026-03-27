@@ -11,7 +11,6 @@
   </head>
 
   <body>
-    <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-logo">
         <div class="logo-icon">r/</div>
@@ -23,24 +22,12 @@
 
       <nav class="sidebar-nav">
         <ul>
-          <li class="active" data-section="accueil">
-            <span class="nav-icon">⌂</span> Accueil
-          </li>
-          <li data-section="stats">
-            <span class="nav-icon">📊</span> Statistiques
-          </li>
-          <li data-section="ia">
-            <span class="nav-icon">✦</span> Analyse IA
-          </li>
-          <li data-section="general">
-            <span class="nav-icon">◈</span> Analyse générale
-          </li>
-          <li data-section="planning">
-            <span class="nav-icon">📅</span> Planning
-          </li>
-          <li data-section="donnees">
-            <span class="nav-icon">⊞</span> Données
-          </li>
+          <li class="active" data-section="accueil"><span class="nav-icon">⌂</span> Accueil</li>
+          <li data-section="stats"><span class="nav-icon">📊</span> Statistiques</li>
+          <li data-section="ia"><span class="nav-icon">✦</span> Analyse IA</li>
+          <li data-section="general"><span class="nav-icon">◈</span> Analyse générale</li>
+          <li data-section="planning"><span class="nav-icon">📅</span> Planning</li>
+          <li data-section="donnees"><span class="nav-icon">⊞</span> Données</li>
         </ul>
       </nav>
 
@@ -51,7 +38,6 @@
       </div>
     </aside>
 
-    <!-- MAIN CONTENT -->
     <main class="content">
 
       <!-- ACCUEIL -->
@@ -63,7 +49,6 @@
           </div>
           <div class="header-date" id="current-date"></div>
         </div>
-
         <div class="stats-cards">
           <div class="stat-card" data-color="blue">
             <div class="stat-label">Total posts</div>
@@ -86,7 +71,6 @@
             <div class="stat-trend">pour publier</div>
           </div>
         </div>
-
         <div class="home-charts">
           <div class="chart-card">
             <div class="chart-title">Évolution des scores</div>
@@ -107,7 +91,6 @@
             <p class="page-sub">Analyse détaillée de tes performances</p>
           </div>
         </div>
-
         <div class="charts-grid">
           <div class="chart-card">
             <div class="chart-title">Score moyen par jour</div>
@@ -140,21 +123,16 @@
             <p class="page-sub">Analyse intelligente de tes titres basée sur les patterns Reddit</p>
           </div>
         </div>
-
         <div class="ia-input-zone">
           <textarea id="input-text" placeholder="Colle ici ton titre de post pour l'analyser..."></textarea>
           <div class="ia-actions">
-            <button id="analyze-btn" class="btn-primary">
-              <span>✦</span> Analyser ce titre
-            </button>
+            <button id="analyze-btn" class="btn-primary"><span>✦</span> Analyser ce titre</button>
           </div>
         </div>
-
         <div id="ai-loading" class="ai-loading hidden">
           <div class="loading-spinner"></div>
           <p>Analyse en cours...</p>
         </div>
-
         <div id="ai-result"></div>
       </section>
 
@@ -178,7 +156,6 @@
           </div>
         </div>
 
-        <!-- CALENDRIER HEATMAP -->
         <div class="chart-card" style="margin-bottom:20px;">
           <div class="chart-title">🗓️ Heatmap — Meilleurs créneaux pour publier</div>
           <div id="calendar-grid"></div>
@@ -199,12 +176,13 @@
                 <option value="Instagram">Instagram</option>
                 <option value="TikTok">TikTok</option>
               </select>
+              <input type="text" id="idea-subreddit" placeholder="Subreddit (ex: jobsansfiltre, horror, cuisine...)" value="jobsansfiltre" />
               <input type="text" id="idea-topic" placeholder="Ex: salaire, entretien, reconversion..." />
               <button id="generate-idea-btn" class="btn-primary">✦ Générer des idées + posts</button>
             </div>
             <div id="idea-loading" class="ai-loading hidden">
               <div class="loading-spinner"></div>
-              <p>Génération en cours...</p>
+              <p>Analyse des tendances Reddit en cours...</p>
             </div>
             <div id="idea-result"></div>
           </div>
