@@ -198,30 +198,6 @@
           <button id="export-csv-2" class="btn-secondary">↓ Exporter CSV</button>
         </div>
 
-        <!-- IMPORT REDDIT -->
-        <div class="data-form-card" style="margin-bottom:16px;border-left:4px solid #ff4500;">
-          <h3 style="color:#ff4500;">📥 Importer depuis Reddit</h3>
-          <p style="font-size:13px;color:var(--text-3);margin-bottom:12px;">Importe automatiquement les posts d'un subreddit — tu n'auras qu'à renseigner les vues ensuite</p>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <input type="text" id="reddit-import-sub" placeholder="Nom du subreddit (ex: jobsansfiltre)" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px;background:var(--surface-2);outline:none;flex:1;min-width:200px;" />
-            <select id="reddit-import-filter" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px;background:var(--surface-2);outline:none;">
-              <option value="top">Top posts</option>
-              <option value="new">Nouveaux posts</option>
-              <option value="hot">Posts populaires</option>
-            </select>
-            <select id="reddit-import-period" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px;background:var(--surface-2);outline:none;">
-              <option value="month">Ce mois</option>
-              <option value="week">Cette semaine</option>
-              <option value="year">Cette année</option>
-              <option value="all">Tout temps</option>
-            </select>
-            <input type="number" id="reddit-import-limit" placeholder="Nb posts" value="25" min="1" max="100" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px;background:var(--surface-2);outline:none;width:100px;" />
-            <button id="reddit-import-btn" class="btn-primary" style="background:#ff4500;">🔴 Importer</button>
-          </div>
-          <div id="reddit-import-status" style="margin-top:10px;font-size:13px;color:var(--text-3);"></div>
-        </div>
-
-        <!-- FORMULAIRE MANUEL -->
         <div class="data-form-card">
           <h3 id="form-title">Ajouter un post manuellement</h3>
           <div class="data-form">
@@ -267,7 +243,7 @@
           </table>
           <div id="empty-state" class="empty-state">
             <div class="empty-icon">📭</div>
-            <p>Aucun post pour l'instant.<br/>Clique sur <strong>🔴 Importer</strong> pour importer depuis Reddit ou <strong>🔄 Synchroniser</strong> pour Google Sheets !</p>
+            <p>Aucun post pour l'instant.<br/>Clique sur <strong>🔄 Synchroniser</strong> pour importer depuis Google Sheets !</p>
           </div>
         </div>
       </section>
