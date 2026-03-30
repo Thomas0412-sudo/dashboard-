@@ -794,41 +794,46 @@ function renderCalendar() {
 ===================== */
  
 async function fetchRedditInspo(topic) {
-  // Chercher dans plusieurs subreddits pertinents selon le sujet
-  const subreddits = ["france", "AskReddit", "learnfrench"];
+  // Plusieurs tentatives avec différentes approches
+  const attempts = [
+    // Recherche globale Reddit sur le sujet
+    `https://www.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=top&t=month&limit=10`,
+    // Recherche dans jobsansfiltre
+    `https://www.reddit.com/r/jobsansfiltre/search.json?q=${encodeURIComponent(topic)}&sort=top&t=all&limit=10&restrict_sr=on`,
+    // Top posts jobsansfiltre
+    `https://www.reddit.com/r/jobsansfiltre/top.json?limit=15&t=month`
+  ];
  
-  // Essayer d'abord avec le sujet comme subreddit
-  const topicClean = topic.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
- 
-  try {
-    // Chercher via l'API Google Apps Script
-    const url = `${SHEETS_API_URL}?action=reddit&subreddit=${encodeURIComponent(topicClean)}&filter=top&limit=10`;
-    const response = await fetch(url);
-    if (response.ok) {
+  for (const url of attempts) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) continue;
       const json = await response.json();
-      if (json.success && json.data && json.data.length >= 3) {
-        return json.data.sort((a,b) => b.score - a.score).slice(0, 3);
-      }
-    }
-  } catch(e) {}
+      if (!json?.data?.children?.length) continue;
  
-  // Sinon chercher dans jobsansfiltre avec mots-clés
-  try {
-    const url2 = `${SHEETS_API_URL}?action=reddit&subreddit=jobsansfiltre&filter=top&limit=25`;
-    const response2 = await fetch(url2);
-    if (response2.ok) {
-      const json2 = await response2.json();
-      if (json2.success && json2.data) {
-        const words = topic.toLowerCase().split(" ").filter(w => w.length > 3);
-        const relevant = json2.data.filter(p =>
-          words.some(w => p.title.toLowerCase().includes(w))
-        );
-        const pool = relevant.length >= 2 ? relevant : json2.data;
-        return pool.sort((a,b) => b.score - a.score).slice(0, 3);
-      }
-    }
-  } catch(e) {}
+      const posts = json.data.children
+        .map(c => c.data)
+        .filter(p => p.title && !p.stickied)
+        .map(p => ({
+          title: p.title,
+          score: p.score,
+          num_comments: p.num_comments,
+          created: new Date(p.created_utc * 1000).toLocaleDateString("fr-FR"),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
  
+      if (posts.length >= 1) {
+        console.log("Reddit OK ✅ :", posts.length, "posts trouvés");
+        return posts;
+      }
+    } catch(e) {
+      console.log("Tentative échouée:", url, e.message);
+      continue;
+    }
+  }
+ 
+  console.log("Reddit API non disponible — génération locale");
   return null;
 }
  
