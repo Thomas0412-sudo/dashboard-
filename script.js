@@ -490,7 +490,7 @@ async function importFromReddit() {
   const statusEl = document.getElementById("reddit-import-status");
   const btn = document.getElementById("reddit-import-btn");
  
-  const subreddit = subEl?.value.trim().replace(/^r\//,"");
+  const subreddit = subEl?.value.trim().replace(/^r\//i,"").replace(/\s/g,"");
   const filter = filterEl?.value || "top";
   const period = periodEl?.value || "month";
   const limit = Math.min(Number(limitEl?.value) || 25, 100);
@@ -499,79 +499,94 @@ async function importFromReddit() {
  
   btn.disabled = true;
   btn.textContent = "⏳ Import en cours...";
-  statusEl.textContent = `Recherche des posts sur r/${subreddit}...`;
+  statusEl.textContent = `Connexion à r/${subreddit}...`;
   statusEl.style.color = "var(--blue)";
  
-  try {
-    const url = `https://www.reddit.com/r/${subreddit}/${filter}.json?limit=${limit}&t=${period}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Subreddit introuvable (${response.status})`);
-    const json = await response.json();
+  // Proxies CORS gratuits à essayer dans l'ordre
+  const directUrl = `https://www.reddit.com/r/${subreddit}/${filter}.json?limit=${limit}&t=${period}`;
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(directUrl)}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(directUrl)}`,
+    directUrl
+  ];
  
-    if (!json?.data?.children?.length) {
-      throw new Error("Aucun post trouvé sur ce subreddit");
+  let redditData = null;
+ 
+  for (const url of proxies) {
+    try {
+      statusEl.textContent = `Tentative de connexion...`;
+      const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) continue;
+ 
+      let json = await response.json();
+ 
+      // allorigins encapsule dans contents
+      if (json.contents) json = JSON.parse(json.contents);
+ 
+      if (!json?.data?.children?.length) continue;
+      redditData = json.data.children;
+      break;
+    } catch(e) {
+      continue;
     }
- 
-    const redditPosts = json.data.children
-      .map(c => c.data)
-      .filter(p => p.title && !p.stickied);
- 
-    let added = 0, skipped = 0;
- 
-    redditPosts.forEach(p => {
-      // Vérifier si le post existe déjà (par URL ou titre+auteur)
-      const alreadyExists = posts.some(existing =>
-        existing.title === p.title && existing.author === p.author
-      );
-      if (alreadyExists) { skipped++; return; }
- 
-      // Convertir la date Reddit (timestamp Unix)
-      const date = new Date(p.created_utc * 1000);
-      const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
-      const timeStr = `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
-      const jour = date.toLocaleDateString("fr-FR", { weekday: "long" });
-      const heureDecimale = date.getHours() + date.getMinutes() / 60;
- 
-      const likes = p.score || 0;
-      const comments = p.num_comments || 0;
-      const views = 0; // À renseigner manuellement
-      const engagement = likes + comments;
- 
-      posts.push({
-        platform: "Reddit",
-        date: dateStr,
-        time: timeStr,
-        author: p.author || "",
-        title: p.title,
-        likes,
-        comments,
-        views,
-        engagement,
-        jour,
-        score: 0, // Sera recalculé après normalisation
-        heureDecimale,
-        url: `https://reddit.com${p.permalink}`,
-        flair: p.link_flair_text || "",
-        fromReddit: true,
-        needsViews: true // Indique qu'il faut renseigner les vues
-      });
-      added++;
-    });
- 
-    // Re-normaliser tous les scores
-    posts = normalizeScores(posts);
-    savePosts();
-    renderTable();
-    renderHomeCharts();
- 
-    statusEl.textContent = `✅ ${added} posts importés depuis r/${subreddit} ! ${skipped > 0 ? `(${skipped} déjà existants ignorés)` : ""} — Renseigne les vues dans le tableau pour affiner les scores.`;
-    statusEl.style.color = "var(--green)";
- 
-  } catch(err) {
-    statusEl.textContent = `❌ Erreur : ${err.message}`;
-    statusEl.style.color = "var(--red)";
   }
  
+  if (!redditData) {
+    statusEl.textContent = `❌ Impossible de se connecter à r/${subreddit}. Reddit bloque peut-être les requêtes externes.`;
+    statusEl.style.color = "var(--red)";
+    btn.disabled = false;
+    btn.textContent = "🔴 Importer";
+    return;
+  }
+ 
+  const redditPosts = redditData
+    .map(c => c.data)
+    .filter(p => p.title && !p.stickied);
+ 
+  let added = 0, skipped = 0;
+ 
+  redditPosts.forEach(p => {
+    const alreadyExists = posts.some(existing =>
+      existing.title === p.title && existing.author === p.author
+    );
+    if (alreadyExists) { skipped++; return; }
+ 
+    const date = new Date(p.created_utc * 1000);
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+    const timeStr = `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
+    const jour = date.toLocaleDateString("fr-FR", { weekday: "long" });
+    const heureDecimale = date.getHours() + date.getMinutes() / 60;
+    const likes = p.score || 0;
+    const comments = p.num_comments || 0;
+ 
+    posts.push({
+      platform: "Reddit",
+      date: dateStr,
+      time: timeStr,
+      author: p.author || "",
+      title: p.title,
+      likes,
+      comments,
+      views: 0,
+      engagement: likes + comments,
+      jour,
+      score: 0,
+      heureDecimale,
+      url: `https://reddit.com${p.permalink}`,
+      flair: p.link_flair_text || "",
+      fromReddit: true,
+      needsViews: true
+    });
+    added++;
+  });
+ 
+  posts = normalizeScores(posts);
+  savePosts();
+  renderTable();
+  renderHomeCharts();
+ 
+  statusEl.textContent = `✅ ${added} posts importés depuis r/${subreddit} !${skipped > 0 ? ` (${skipped} déjà existants ignorés)` : ""} — Clique sur "+ Vues" pour renseigner les vues.`;
+  statusEl.style.color = "var(--green)";
   btn.disabled = false;
   btn.textContent = "🔴 Importer";
 }
@@ -1265,4 +1280,3 @@ document.addEventListener("DOMContentLoaded", () => {
   // Sync auto au chargement + toutes les 5 min
   setTimeout(() => syncFromSheets(false), 1500);
   setInterval(() => syncFromSheets(false), 5 * 60 * 1000);
-});
