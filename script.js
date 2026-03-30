@@ -794,14 +794,12 @@ function renderCalendar() {
 ===================== */
  
 async function fetchRedditInspo(topic) {
-  // Plusieurs tentatives avec différentes approches
+  // Recherche globale sur tout Reddit — pas seulement jobsansfiltre
   const attempts = [
-    // Recherche globale Reddit sur le sujet
-    `https://www.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=top&t=month&limit=10`,
-    // Recherche dans jobsansfiltre
-    `https://www.reddit.com/r/jobsansfiltre/search.json?q=${encodeURIComponent(topic)}&sort=top&t=all&limit=10&restrict_sr=on`,
-    // Top posts jobsansfiltre
-    `https://www.reddit.com/r/jobsansfiltre/top.json?limit=15&t=month`
+    // Recherche globale Reddit sur le sujet (tous subreddits confondus)
+    `https://www.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=top&t=month&limit=15`,
+    // Recherche sur 6 mois si pas de résultats ce mois-ci
+    `https://www.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=top&t=year&limit=15`,
   ];
  
   for (const url of attempts) {
@@ -813,22 +811,23 @@ async function fetchRedditInspo(topic) {
  
       const posts = json.data.children
         .map(c => c.data)
-        .filter(p => p.title && !p.stickied)
+        .filter(p => p.title && !p.stickied && p.score > 10)
         .map(p => ({
           title: p.title,
           score: p.score,
           num_comments: p.num_comments,
+          subreddit: p.subreddit,
           created: new Date(p.created_utc * 1000).toLocaleDateString("fr-FR"),
         }))
         .sort((a, b) => b.score - a.score)
-        .slice(0, 3);
+        .slice(0, 5);
  
       if (posts.length >= 1) {
-        console.log("Reddit OK ✅ :", posts.length, "posts trouvés");
+        console.log("Reddit OK ✅ :", posts.length, "posts trouvés sur", [...new Set(posts.map(p => p.subreddit))].join(", "));
         return posts;
       }
     } catch(e) {
-      console.log("Tentative échouée:", url, e.message);
+      console.log("Tentative échouée:", e.message);
       continue;
     }
   }
@@ -837,72 +836,77 @@ async function fetchRedditInspo(topic) {
   return null;
 }
  
-function buildPost1(topic, redditPost, platform) {
-  // FORMAT 1 : Témoignage personnel émotionnel
-  const titre = redditPost
-    ? `J'ai vécu "${redditPost.title.substring(0, 40)}..." — voici ma version`
-    : `Ce que personne ne dit vraiment sur ${topic}`;
+function buildPost1(topic, redditPosts, platform) {
+  // FORMAT 1 : Témoignage personnel — inspiré des tendances mais 100% original
+  const angles = redditPosts
+    ? redditPosts.slice(0,2).map(p => {
+        // Extraire l'angle émotionnel sans copier le titre
+        const words = p.title.split(" ").filter(w => w.length > 4);
+        return words[Math.floor(Math.random() * words.length)] || topic;
+      })
+    : [topic];
+ 
+  const angle = angles[0] || topic;
+  const titre = `Ce que j'ai vraiment vécu avec ${topic} — personne n'en parle`;
  
   const p = (platform || "Reddit").toLowerCase();
   if (p === "linkedin") {
     return {
       titre,
       type: "Témoignage",
-      contenu: `${titre}\n\nIl y a [X] mois, j'étais dans une situation que beaucoup connaissent mais peu osent évoquer.\n\nJe me suis retrouvé face à [situation liée à ${topic}].\n\nCe que j'ai ressenti :\n😰 D'abord la panique\n🤔 Puis la réflexion\n💡 Enfin la clarté\n\nLa leçon que j'en tire aujourd'hui :\n[Ta leçon personnelle en 2-3 phrases impactantes]\n\nSi tu traverses quelque chose de similaire, sache que tu n'es pas seul(e).\n\nQu'est-ce que toi tu aurais fait dans cette situation ?\n\n#${topic.replace(/\s+/g,"")} #Témoignage #JobSansFiltre`,
-      inspo: redditPost ? `⬆️ ${redditPost.score} upvotes sur Reddit` : null
+      contenu: `${titre}\n\nIl y a [X] mois, j'étais dans une situation que beaucoup connaissent mais peu osent évoquer.\n\nJe me suis retrouvé face à [ta situation personnelle liée à ${topic}].\n\nCe que j'ai ressenti :\n😰 D'abord la panique\n🤔 Puis la réflexion\n💡 Enfin la clarté\n\nLa leçon que j'en tire aujourd'hui :\n→ [Ta leçon 1]\n→ [Ta leçon 2]\n→ [Ta leçon 3]\n\nSi tu traverses quelque chose de similaire, tu n'es pas seul(e).\n\nQu'aurais-tu fait à ma place ?\n\n#${topic.replace(/\s+/g,"")} #Témoignage #Authenticité`,
+      inspo: redditPosts ? `Inspiré de ${redditPosts.length} posts viraux sur r/${redditPosts.map(p=>p.subreddit).join(", r/")}` : null
     };
   }
   return {
     titre,
     type: "Témoignage",
-    contenu: `**${titre}**\n\nJe vais vous partager quelque chose de personnel.\n\nIl y a peu, je me retrouvais face à [situation liée à ${topic}]. Ce que j'ai vécu m'a profondément marqué.\n\n**Ce que ça m'a appris :**\n\n1. [Première leçon concrète]\n2. [Deuxième leçon]\n3. [Ce que j'aurais fait différemment]\n\nSi vous êtes passé par là, je veux vraiment entendre votre histoire. 👇`,
-    inspo: redditPost ? `⬆️ ${redditPost.score} upvotes sur Reddit` : null
+    contenu: `**${titre}**\n\nJe vais vous partager quelque chose que je n'ai jamais dit publiquement.\n\nQuand j'ai été confronté à [ta situation liée à ${topic}], j'ai fait une erreur que beaucoup font.\n\n**Ce que j'aurais dû faire :**\n\n1. [Action concrète 1]\n2. [Action concrète 2]\n3. [Ce que j'ai finalement compris]\n\n**Ce que ça m'a appris sur ${topic} :**\n[Ta conclusion personnelle en 2-3 phrases authentiques]\n\nVous avez vécu quelque chose de similaire ? 👇`,
+    inspo: redditPosts ? `Inspiré de ${redditPosts.length} posts viraux sur r/${redditPosts.map(p=>p.subreddit).join(", r/")}` : null
   };
 }
  
-function buildPost2(topic, redditPost, platform) {
-  // FORMAT 2 : Débat / Opinion tranchée avec arguments
-  const titre = redditPost
-    ? `Non, ${redditPost.title.substring(0, 35)}... c'est plus compliqué que ça`
-    : `${topic} : arrêtons de mentir sur ce qui se passe vraiment`;
+function buildPost2(topic, redditPosts, platform) {
+  // FORMAT 2 : Opinion tranchée avec données réelles
+  const titre = `${topic} : voici ce que les chiffres disent vraiment (et c'est surprenant)`;
+  const topSubreddits = redditPosts ? [...new Set(redditPosts.map(p => p.subreddit))].slice(0,2).join(" et r/") : "";
  
   const p = (platform || "Reddit").toLowerCase();
   if (p === "linkedin") {
     return {
       titre,
-      type: "Opinion",
-      contenu: `${titre}\n\nOpinion impopulaire : la plupart des discours sur ${topic} sont faux.\n\nVoici ce que personne n'ose dire :\n\n❌ Ce qu'on croit : [idée reçue 1]\n✅ La réalité : [ce qui se passe vraiment]\n\n❌ Ce qu'on croit : [idée reçue 2]\n✅ La réalité : [vérité]\n\n❌ Ce qu'on croit : [idée reçue 3]\n✅ La réalité : [vérité]\n\nJe suis prêt à défendre chacun de ces points.\n\nVous êtes d'accord ? En désaccord ? Dites-moi tout 👇\n\n#Opinion #${topic.replace(/\s+/g,"")} #JobSansFiltre`,
-      inspo: redditPost ? `⬆️ ${redditPost.score} upvotes sur Reddit` : null
+      type: "Opinion data-driven",
+      contenu: `${titre}\n\nJ'ai passé du temps à analyser ce sujet et ce que j'ai trouvé m'a surpris.\n\n📊 Ce que pensent la majorité :\n[Idée reçue commune sur ${topic}]\n\n❌ Ce que les données montrent vraiment :\n[Ta contre-argumentation basée sur ton expérience]\n\nLes 3 points qui m'ont le plus frappé :\n\n1️⃣ [Point surprenant 1]\n2️⃣ [Point surprenant 2]\n3️⃣ [Point surprenant 3]\n\nConclusion : [Ta position claire et argumentée]\n\nVous en pensez quoi ? Désaccord bienvenu 👇\n\n#${topic.replace(/\s+/g,"")} #Data #Analyse`,
+      inspo: redditPosts ? `Basé sur les tendances de r/${topSubreddits}` : null
     };
   }
   return {
     titre,
-    type: "Opinion",
-    contenu: `**${titre}**\n\nJe vais dire quelque chose d'impopulaire.\n\nTout le monde parle de ${topic} mais personne ne dit vraiment ce qui se passe.\n\n**Les 3 idées reçues que j'entends tout le temps :**\n\n❌ *"[Idée reçue 1]"* → En réalité, [ce qui se passe vraiment]\n\n❌ *"[Idée reçue 2]"* → En réalité, [vérité]\n\n❌ *"[Idée reçue 3]"* → En réalité, [vérité]\n\nÊtes-vous d'accord ? Ou je me trompe complètement ? 🤔`,
-    inspo: redditPost ? `⬆️ ${redditPost.score} upvotes sur Reddit` : null
+    type: "Opinion data-driven",
+    contenu: `**${titre}**\n\nJ'ai analysé des dizaines de témoignages sur ${topic} et voici ce qui ressort vraiment.\n\n**Ce que tout le monde croit :**\n❌ [Idée reçue 1]\n❌ [Idée reçue 2]\n❌ [Idée reçue 3]\n\n**La réalité selon mon analyse :**\n✅ [Vérité 1 — avec un exemple concret]\n✅ [Vérité 2 — avec un exemple concret]\n✅ [Vérité 3 — avec un exemple concret]\n\n**Ma conclusion :**\n[Ta position tranchée en 2 phrases]\n\nJe suis prêt à défendre chaque point. Lancez-vous 👇`,
+    inspo: redditPosts ? `Basé sur les tendances de r/${topSubreddits}` : null
   };
 }
  
-function buildPost3(topic, redditPost, platform) {
-  // FORMAT 3 : Question communautaire + sondage
-  const titre = redditPost
-    ? `Sérieusement, ${redditPost.title.substring(0, 40)}... vous avez tous vécu ça ?`
-    : `${topic} : votre expérience ressemble à quoi concrètement ?`;
+function buildPost3(topic, redditPosts, platform) {
+  // FORMAT 3 : Question ouverte qui invite au débat
+  const titre = `Franchement, comment vous gérez ${topic} au quotidien ? Je veux des vraies réponses`;
+  const topSubreddits = redditPosts ? [...new Set(redditPosts.map(p => p.subreddit))].slice(0,2).join(" et r/") : "";
  
   const p = (platform || "Reddit").toLowerCase();
   if (p === "linkedin") {
     return {
       titre,
-      type: "Question communautaire",
-      contenu: `${titre}\n\nJe pose la question directement à ma communauté.\n\nDepuis [X] temps, j'observe que ${topic} divise vraiment les gens.\n\nMoi personnellement : [ta position en 1 phrase]\n\nMais j'ai envie de comprendre vos réalités :\n\n→ Comment vous vivez ${topic} au quotidien ?\n→ Quel a été votre plus grand défi ?\n→ Qu'est-ce qui vous a aidé ?\n\nRépondez en commentaires, je lis tout et réponds à chacun ✉️\n\n#${topic.replace(/\s+/g,"")} #Communauté #JobSansFiltre`,
-      inspo: redditPost ? `⬆️ ${redditPost.score} upvotes sur Reddit` : null
+      type: "Question communauté",
+      contenu: `${titre}\n\nJe pose la question directement, sans langue de bois.\n\nDepuis que je travaille sur ${topic}, j'entends beaucoup de discours formatés.\n\nMoi je veux savoir ce que vous vivez VRAIMENT :\n\n→ Quel est votre plus grand défi avec ${topic} en ce moment ?\n→ Qu'est-ce qui vous a aidé concrètement ?\n→ Ce que vous auriez aimé savoir au début ?\n\nPas de réponse parfaite ici. Juste des expériences honnêtes.\n\nJe réponds personnellement à chaque commentaire ✉️\n\n#${topic.replace(/\s+/g,"")} #Communauté #Authenticité`,
+      inspo: redditPosts ? `Inspiré des discussions sur r/${topSubreddits}` : null
     };
   }
   return {
     titre,
-    type: "Question communautaire",
-    contenu: `**${titre}**\n\nJe pose la question franchement à cette communauté.\n\nDepuis quelque temps je vois beaucoup de posts sur ${topic} mais j'ai l'impression qu'on tourne autour du pot.\n\n**Mes vraies questions :**\n\n🔸 Comment vous vivez ça concrètement ?\n🔸 Quel a été votre pire moment lié à ce sujet ?\n🔸 Et votre meilleure découverte ?\n\nPas de bonne ou mauvaise réponse. Je veux juste des témoignages honnêtes.\n\n*(Je lis et réponds à tous les commentaires 👇)*`,
-    inspo: redditPost ? `⬆️ ${redditPost.score} upvotes sur Reddit` : null
+    type: "Question communauté",
+    contenu: `**${titre}**\n\nPas de discours. Pas de conseils formatés. Juste une vraie question.\n\nJe vois énormément de posts sur ${topic} mais on tourne souvent autour du pot.\n\n**Ce que je veux vraiment savoir :**\n\n🔸 Votre pire expérience avec ${topic} ?\n🔸 Ce qui vous a VRAIMENT aidé (pas les conseils classiques) ?\n🔸 Ce que vous feriez différemment si vous recommenciez ?\n\nPrenez 2 minutes. Répondez honnêtement.\n\n*(Je lis et réponds à absolument tous les commentaires 👇)*`,
+    inspo: redditPosts ? `Inspiré des discussions sur r/${topSubreddits}` : null
   };
 }
  
@@ -926,23 +930,25 @@ generateIdeaBtn && generateIdeaBtn.addEventListener("click", async () => {
  
   // Générer les 3 posts avec formats vraiment différents
   const posts3 = [
-    buildPost1(topic, redditPosts?.[0], platform),
-    buildPost2(topic, redditPosts?.[1], platform),
-    buildPost3(topic, redditPosts?.[2], platform),
+    buildPost1(topic, redditPosts, platform),
+    buildPost2(topic, redditPosts, platform),
+    buildPost3(topic, redditPosts, platform),
   ];
  
   // Afficher les posts Reddit viraux si trouvés
   let redditInspoHtml = "";
   if (redditPosts && redditPosts.length > 0) {
+    const subreddits = [...new Set(redditPosts.map(p => p.subreddit))];
     redditInspoHtml = `
       <div style="background:var(--orange-light);border:1px solid #fed7aa;border-radius:var(--radius);padding:14px;margin-bottom:16px;">
-        <div style="font-weight:700;font-size:13px;color:var(--orange);margin-bottom:8px;">🔥 Top posts viraux trouvés pour t'inspirer</div>
+        <div style="font-weight:700;font-size:13px;color:var(--orange);margin-bottom:4px;">🔥 Top posts viraux trouvés sur Reddit</div>
+        <div style="font-size:11px;color:var(--orange);margin-bottom:10px;">Sources : ${subreddits.map(s => `r/${s}`).join(", ")}</div>
         ${redditPosts.map(p => `
           <div style="padding:6px 0;border-bottom:1px solid #fed7aa;font-size:12px;">
             <div style="font-weight:600;color:var(--text);margin-bottom:2px;">${p.title}</div>
-            <div style="color:var(--text-3);">⬆️ ${p.score} upvotes · 💬 ${p.num_comments} commentaires · ${p.created}</div>
+            <div style="color:var(--text-3);">r/${p.subreddit} · ⬆️ ${p.score} · 💬 ${p.num_comments} · ${p.created}</div>
           </div>`).join("")}
-        <p style="font-size:11px;color:var(--orange);margin-top:8px;">✨ Les 3 posts ci-dessous sont originaux et inspirés de ces tendances</p>
+        <p style="font-size:11px;color:var(--orange);margin-top:8px;">✨ Les 3 posts ci-dessous sont 100% originaux, inspirés de ces tendances</p>
       </div>`;
   }
  
