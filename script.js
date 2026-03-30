@@ -286,9 +286,16 @@ function renderTable() {
  
     // Formater la date en jj/mm/aaaa
     let dateDisplay = post.date;
-    if (post.date && post.date.match(/^\d{4}-\d{2}-\d{2}/)) {
-      const parts = post.date.split("-");
-      dateDisplay = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    if (post.date) {
+      const raw = String(post.date).trim();
+      if (raw.match(/^\d{4}-\d{2}-\d{2}/)) {
+        // Format YYYY-MM-DD → jj/mm/aaaa
+        const parts = raw.substring(0,10).split("-");
+        dateDisplay = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      } else if (raw.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+        // Déjà en jj/mm/aaaa
+        dateDisplay = raw;
+      }
     }
     row.innerHTML = `
       <td>${post.platform}</td>
