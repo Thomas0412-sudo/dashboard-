@@ -295,10 +295,10 @@ function renderTable() {
       <td>${dateDisplay}</td>
       <td>${post.time}</td>
       <td>${post.author}</td>
-      <td title="${post.title}">${post.title}</td>
+      <td title="${post.title}">${post.title}${post.url ? ` <a href="${post.url}" target="_blank" style="color:var(--blue);font-size:10px;">↗</a>` : ""}</td>
       <td>${post.likes}</td>
       <td>${post.comments}</td>
-      <td>${post.views.toLocaleString("fr-FR")}</td>
+      <td>${post.needsViews ? `<span style="color:var(--orange);font-weight:600;cursor:pointer;" onclick="promptViews(${index})" title="Clique pour renseigner les vues">+ Vues</span>` : post.views.toLocaleString("fr-FR")}</td>
       <td><span class="score-badge ${scoreClass}">${post.score}</span></td>
       <td>
         <div class="action-btns">
@@ -310,6 +310,20 @@ function renderTable() {
     dataBody.appendChild(row);
   });
   updateStats();
+}
+ 
+function promptViews(index) {
+  const post = posts[index];
+  const views = prompt(`Combien de vues pour ce post ?\n\n"${post.title.substring(0, 60)}..."`);
+  if (views === null) return;
+  const viewsNum = Number(views);
+  if (isNaN(viewsNum) || viewsNum < 0) { alert("Nombre de vues invalide"); return; }
+  posts[index].views = viewsNum;
+  posts[index].needsViews = false;
+  posts[index].engagement = posts[index].likes + posts[index].comments;
+  posts = normalizeScores(posts);
+  savePosts();
+  renderTable();
 }
  
 /* =====================
@@ -457,6 +471,106 @@ if (exportBtn2) exportBtn2.addEventListener("click", exportCSV);
  
 const syncBtnEl = document.getElementById("sync-btn");
 if (syncBtnEl) syncBtnEl.addEventListener("click", () => syncFromSheets(true));
+ 
+/* =====================
+   IMPORT REDDIT DANS DONNÉES
+===================== */
+async function importFromReddit() {
+  const subEl = document.getElementById("reddit-import-sub");
+  const filterEl = document.getElementById("reddit-import-filter");
+  const periodEl = document.getElementById("reddit-import-period");
+  const limitEl = document.getElementById("reddit-import-limit");
+  const statusEl = document.getElementById("reddit-import-status");
+  const btn = document.getElementById("reddit-import-btn");
+ 
+  const subreddit = subEl?.value.trim().replace(/^r\//,"");
+  const filter = filterEl?.value || "top";
+  const period = periodEl?.value || "month";
+  const limit = Math.min(Number(limitEl?.value) || 25, 100);
+ 
+  if (!subreddit) { alert("Entre un nom de subreddit !"); return; }
+ 
+  btn.disabled = true;
+  btn.textContent = "⏳ Import en cours...";
+  statusEl.textContent = `Recherche des posts sur r/${subreddit}...`;
+  statusEl.style.color = "var(--blue)";
+ 
+  try {
+    const url = `https://www.reddit.com/r/${subreddit}/${filter}.json?limit=${limit}&t=${period}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Subreddit introuvable (${response.status})`);
+    const json = await response.json();
+ 
+    if (!json?.data?.children?.length) {
+      throw new Error("Aucun post trouvé sur ce subreddit");
+    }
+ 
+    const redditPosts = json.data.children
+      .map(c => c.data)
+      .filter(p => p.title && !p.stickied);
+ 
+    let added = 0, skipped = 0;
+ 
+    redditPosts.forEach(p => {
+      // Vérifier si le post existe déjà (par URL ou titre+auteur)
+      const alreadyExists = posts.some(existing =>
+        existing.title === p.title && existing.author === p.author
+      );
+      if (alreadyExists) { skipped++; return; }
+ 
+      // Convertir la date Reddit (timestamp Unix)
+      const date = new Date(p.created_utc * 1000);
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+      const timeStr = `${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
+      const jour = date.toLocaleDateString("fr-FR", { weekday: "long" });
+      const heureDecimale = date.getHours() + date.getMinutes() / 60;
+ 
+      const likes = p.score || 0;
+      const comments = p.num_comments || 0;
+      const views = 0; // À renseigner manuellement
+      const engagement = likes + comments;
+ 
+      posts.push({
+        platform: "Reddit",
+        date: dateStr,
+        time: timeStr,
+        author: p.author || "",
+        title: p.title,
+        likes,
+        comments,
+        views,
+        engagement,
+        jour,
+        score: 0, // Sera recalculé après normalisation
+        heureDecimale,
+        url: `https://reddit.com${p.permalink}`,
+        flair: p.link_flair_text || "",
+        fromReddit: true,
+        needsViews: true // Indique qu'il faut renseigner les vues
+      });
+      added++;
+    });
+ 
+    // Re-normaliser tous les scores
+    posts = normalizeScores(posts);
+    savePosts();
+    renderTable();
+    renderHomeCharts();
+ 
+    statusEl.textContent = `✅ ${added} posts importés depuis r/${subreddit} ! ${skipped > 0 ? `(${skipped} déjà existants ignorés)` : ""} — Renseigne les vues dans le tableau pour affiner les scores.`;
+    statusEl.style.color = "var(--green)";
+ 
+  } catch(err) {
+    statusEl.textContent = `❌ Erreur : ${err.message}`;
+    statusEl.style.color = "var(--red)";
+  }
+ 
+  btn.disabled = false;
+  btn.textContent = "🔴 Importer";
+}
+ 
+const redditImportBtn = document.getElementById("reddit-import-btn");
+if (redditImportBtn) redditImportBtn.addEventListener("click", importFromReddit);
  
 /* =====================
    ANALYSE IA
