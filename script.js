@@ -714,11 +714,12 @@ function generateGlobalInsights() {
 }
  
 /* =====================
-   PLANNING — CALENDRIER VISUEL + GÉNÉRATEUR DE POST
+   PLANNING INTELLIGENT
 ===================== */
 function renderPlanning() {
   renderCalendar();
   renderBestSlots();
+  renderWeeklyPlanner();
 }
  
 function renderBestSlots() {
@@ -746,11 +747,8 @@ function renderBestSlots() {
 function renderCalendar() {
   const calEl = document.getElementById("calendar-grid");
   if (!calEl) return;
- 
   const jours = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
   const heures = [8,9,10,11,12,13,14,15,16,17,18,19,20,21];
- 
-  // Calculer score moyen par jour+heure
   const heatmap = {};
   posts.forEach(p => {
     const h = Math.floor(p.heureDecimale || 0);
@@ -759,43 +757,28 @@ function renderCalendar() {
     heatmap[key].total += p.score;
     heatmap[key].count++;
   });
- 
   const maxScore = Math.max(...Object.values(heatmap).map(v => v.total/v.count), 1);
- 
-  let html = `
-    <div style="overflow-x:auto;">
-      <table style="border-collapse:collapse;width:100%;font-size:12px;">
-        <thead>
-          <tr>
-            <th style="padding:6px 10px;text-align:left;color:var(--text-3);font-weight:600;border-bottom:1px solid var(--border);">Heure</th>
-            ${jours.map(j => `<th style="padding:6px 8px;text-align:center;color:var(--text-3);font-weight:600;border-bottom:1px solid var(--border);min-width:80px;">${j.charAt(0).toUpperCase()+j.slice(1)}</th>`).join("")}
-          </tr>
-        </thead>
-        <tbody>`;
- 
+  let html = `<div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;font-size:12px;">
+    <thead><tr>
+      <th style="padding:6px 10px;text-align:left;color:var(--text-3);font-weight:600;border-bottom:1px solid var(--border);">Heure</th>
+      ${jours.map(j => `<th style="padding:6px 8px;text-align:center;color:var(--text-3);font-weight:600;border-bottom:1px solid var(--border);min-width:80px;">${j.charAt(0).toUpperCase()+j.slice(1)}</th>`).join("")}
+    </tr></thead><tbody>`;
   heures.forEach(h => {
-    html += `<tr>`;
-    html += `<td style="padding:5px 10px;color:var(--text-3);font-family:var(--font-mono);font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap;">${h}h</td>`;
+    html += `<tr><td style="padding:5px 10px;color:var(--text-3);font-family:var(--font-mono);font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap;">${h}h</td>`;
     jours.forEach(j => {
-      const key = `${j}|${h}`;
-      const data = heatmap[key];
+      const data = heatmap[`${j}|${h}`];
       if (data) {
         const avg = data.total / data.count;
         const intensity = avg / maxScore;
         const bg = intensity > 0.7 ? "#059669" : intensity > 0.4 ? "#3b82f6" : intensity > 0.2 ? "#8b5cf6" : "#e8eaf0";
         const textColor = intensity > 0.2 ? "white" : "var(--text-3)";
-        html += `<td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--border);">
-          <div title="${j} ${h}h — score ${avg.toFixed(1)}" style="background:${bg};color:${textColor};border-radius:6px;padding:4px 2px;font-weight:700;font-size:11px;cursor:default;">${avg.toFixed(1)}</div>
-        </td>`;
+        html += `<td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--border);"><div title="${j} ${h}h — score ${avg.toFixed(1)}" style="background:${bg};color:${textColor};border-radius:6px;padding:4px 2px;font-weight:700;font-size:11px;">${avg.toFixed(1)}</div></td>`;
       } else {
-        html += `<td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--border);">
-          <div style="background:var(--surface-2);border-radius:6px;padding:4px 2px;color:var(--border);font-size:11px;">·</div>
-        </td>`;
+        html += `<td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--border);"><div style="background:var(--surface-2);border-radius:6px;padding:4px 2px;color:var(--border);font-size:11px;">·</div></td>`;
       }
     });
     html += `</tr>`;
   });
- 
   html += `</tbody></table>
     <div style="display:flex;gap:12px;margin-top:12px;align-items:center;flex-wrap:wrap;">
       <span style="font-size:11px;color:var(--text-3);">Légende :</span>
@@ -803,10 +786,187 @@ function renderCalendar() {
       <span style="display:flex;align-items:center;gap:4px;font-size:11px;"><span style="background:#3b82f6;width:12px;height:12px;border-radius:3px;display:inline-block;"></span> Bon</span>
       <span style="display:flex;align-items:center;gap:4px;font-size:11px;"><span style="background:#8b5cf6;width:12px;height:12px;border-radius:3px;display:inline-block;"></span> Moyen</span>
       <span style="display:flex;align-items:center;gap:4px;font-size:11px;"><span style="background:#e8eaf0;width:12px;height:12px;border-radius:3px;display:inline-block;"></span> Peu de données</span>
-    </div>
-  </div>`;
- 
+    </div></div>`;
   calEl.innerHTML = html;
+}
+ 
+/* =====================
+   PLANNING SEMAINE INTELLIGENT
+===================== */
+function renderWeeklyPlanner() {
+  const el = document.getElementById("weekly-planner");
+  if (!el) return;
+  if (posts.length < 5) {
+    el.innerHTML = `<div class="ai-card"><p style="color:var(--text-3);">Ajoute au moins 5 posts pour générer un planning intelligent.</p></div>`;
+    return;
+  }
+  el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-3);">
+    <div class="loading-spinner" style="margin:0 auto 10px;"></div>
+    <p>Génération du planning en cours...</p>
+  </div>`;
+  setTimeout(() => {
+    const planning = generateWeeklyPlan();
+    el.innerHTML = planning;
+  }, 600);
+}
+ 
+function generateWeeklyPlan() {
+  // 1. Détecter les plateformes utilisées
+  const platformCount = {};
+  posts.forEach(p => {
+    platformCount[p.platform] = (platformCount[p.platform] || 0) + 1;
+  });
+  const platforms = Object.keys(platformCount).sort((a,b) => platformCount[b] - platformCount[a]);
+ 
+  // 2. Calculer meilleurs créneaux par jour
+  const slotMap = {};
+  posts.forEach(p => {
+    const key = `${p.jour}|${Math.floor(p.heureDecimale || 0)}`;
+    if (!slotMap[key]) slotMap[key] = { day: p.jour, hour: Math.floor(p.heureDecimale || 0), total: 0, count: 0 };
+    slotMap[key].total += p.score;
+    slotMap[key].count++;
+  });
+  const topSlots = Object.values(slotMap)
+    .map(s => ({ ...s, avg: s.total / s.count }))
+    .sort((a,b) => b.avg - a.avg);
+ 
+  // 3. Calculer nombre de posts/jour selon performances
+  const dayCount = {};
+  posts.forEach(p => { dayCount[p.jour] = (dayCount[p.jour] || 0) + 1; });
+  const avgPostsPerDay = Math.max(1, Math.round(posts.length / 7));
+  const postsPerDay = Math.min(avgPostsPerDay, 3);
+ 
+  // 4. Mots-clés qui performent
+  const keywordMap = {};
+  posts.forEach(p => {
+    extractKeywords(p.title).forEach(k => {
+      if (!keywordMap[k]) keywordMap[k] = { total: 0, count: 0 };
+      keywordMap[k].total += p.score;
+      keywordMap[k].count++;
+    });
+  });
+  const topKw = Object.keys(keywordMap)
+    .filter(k => keywordMap[k].count >= 2)
+    .sort((a,b) => (keywordMap[b].total/keywordMap[b].count) - (keywordMap[a].total/keywordMap[a].count))
+    .slice(0, 8);
+ 
+  // 5. Meilleur type de post
+  const typeScores = {};
+  posts.forEach(p => {
+    const t = detectPostType(p.title);
+    if (!typeScores[t]) typeScores[t] = { total: 0, count: 0 };
+    typeScores[t].total += p.score;
+    typeScores[t].count++;
+  });
+  const bestType = Object.keys(typeScores).sort((a,b) =>
+    (typeScores[b].total/typeScores[b].count) - (typeScores[a].total/typeScores[a].count)
+  )[0];
+ 
+  // 6. Générer les 7 jours
+  const joursOrdre = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
+  const today = new Date();
+  const todayIdx = today.getDay() === 0 ? 6 : today.getDay() - 1;
+ 
+  const postTemplates = {
+    "Reddit": {
+      "Question": (kw) => `**${kw} : vous avez déjà vécu ça ?**\n\nJe me pose cette question depuis un moment et j'aimerais avoir vos retours honnêtes.\n\nDans mon expérience, j'ai observé que [ta situation concrète liée à ${kw}].\n\nMais je veux savoir ce que VOUS pensez vraiment :\n- Vous avez vécu quelque chose de similaire ?\n- Qu'est-ce qui vous a aidé ?\n- Ou au contraire, qu'est-ce qui a aggravé les choses ?\n\nPas de bonne ou mauvaise réponse. Juste des témoignages vrais. 👇`,
+      "Storytelling": (kw) => `**Ce que ${kw} m'a vraiment appris — témoignage sans filtre**\n\nJe n'aurais jamais pensé partager ça publiquement.\n\nMais après avoir lu des dizaines de posts sur ce sujet, je réalise que personne ne dit vraiment ce qui se passe.\n\nAlors voilà mon histoire :\n\n[Ta situation de départ]\n\nCe que j'ai fait :\n1. [Action 1]\n2. [Action 2]\n3. [Ce qui a tout changé]\n\nLa leçon que j'en tire : [ta conclusion personnelle]\n\nSi tu passes par là, tu n'es pas seul(e). 💙`,
+      "Opinion": (kw) => `**Opinion impopulaire sur ${kw} — je m'attends à du débat**\n\nJe vais dire quelque chose que beaucoup pensent tout bas.\n\n[Ton opinion tranchée en 1-2 phrases percutantes]\n\nVoici pourquoi je pense ça :\n\n❌ Ce qu'on entend partout : [idée reçue 1]\n✅ La réalité selon mon expérience : [vérité]\n\n❌ Ce qu'on entend partout : [idée reçue 2]\n✅ La réalité : [vérité]\n\nJe peux me tromper. Convainquez-moi. 👇`,
+    },
+    "LinkedIn": {
+      "Question": (kw) => `${kw} — j'ai besoin de votre avis honnête.\n\nDepuis [X] temps dans ce secteur, j'observe que ce sujet divise vraiment les professionnels.\n\nMa position : [ta position en 1 phrase claire]\n\nMais je veux comprendre votre réalité :\n→ Comment vous vivez ${kw} au quotidien ?\n→ Qu'est-ce qui fonctionne vraiment ?\n→ Ce que vous changeriez si vous pouviez ?\n\nJe réponds personnellement à chaque commentaire. ✉️\n\n#${kw.replace(/\s+/g,"")} #Professionnel #Partage`,
+      "Storytelling": (kw) => `Il y a [X] mois, j'ai vécu quelque chose qui a changé ma façon de voir ${kw}.\n\nJe ne pensais pas en parler publiquement.\n\nMais si ça peut aider une personne dans mon réseau...\n\n[Situation de départ — sois précis et humain]\n\nCe que j'ai appris :\n→ [Leçon 1 — concrète]\n→ [Leçon 2 — actionnable]\n→ [Leçon 3 — surprenante]\n\nLe plus important : [ta conclusion en 1 phrase forte]\n\nQu'est-ce que vous retenez de vos propres expériences ?\n\n#${kw.replace(/\s+/g,"")} #Experience #Leadership`,
+      "Opinion": (kw) => `3 vérités sur ${kw} que personne n'ose dire.\n\n(Et pourtant tout le monde le pense)\n\n1️⃣ [Vérité 1 — surprenante mais vraie]\n\n2️⃣ [Vérité 2 — qui dérange un peu]\n\n3️⃣ [Vérité 3 — la plus importante]\n\nJe préfère une conversation honnête à un like poli.\n\nVous êtes d'accord ? Ou je me trompe complètement ? 👇\n\n#${kw.replace(/\s+/g,"")} #OpinionPro #Authenticité`,
+    }
+  };
+ 
+  let html = `
+    <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h3 style="margin:0;font-size:16px;">📅 Planning des 7 prochains jours</h3>
+        <p style="margin:4px 0 0;font-size:12px;color:var(--text-3);">Basé sur tes ${posts.length} posts · ${postsPerDay} post(s)/jour · Plateformes : ${platforms.slice(0,3).join(", ")}</p>
+      </div>
+      <button onclick="renderWeeklyPlanner()" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-mid);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);">🔄 Regénérer</button>
+    </div>`;
+ 
+  window._planningPosts = {};
+  let postIdx = 0;
+ 
+  for (let d = 0; d < 7; d++) {
+    const dayIdx = (todayIdx + d) % 7;
+    const jourNom = joursOrdre[dayIdx];
+    const dateObj = new Date(today);
+    dateObj.setDate(today.getDate() + d);
+    const dateStr = dateObj.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
+ 
+    // Meilleurs créneaux pour ce jour
+    const daySlots = topSlots
+      .filter(s => s.day === jourNom)
+      .slice(0, postsPerDay);
+ 
+    // Si pas de créneau connu pour ce jour, prendre les meilleurs globaux
+    const slotsToUse = daySlots.length > 0 ? daySlots :
+      topSlots.filter(s => !daySlots.includes(s)).slice(0, postsPerDay);
+ 
+    const isToday = d === 0;
+    const borderColor = isToday ? "var(--blue)" : "var(--border)";
+    const bgColor = isToday ? "var(--blue-light)" : "var(--surface-2)";
+ 
+    html += `
+      <div style="border:2px solid ${borderColor};border-radius:var(--radius);margin-bottom:16px;overflow:hidden;">
+        <div style="background:${bgColor};padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <span style="font-weight:700;font-size:14px;text-transform:capitalize;">${dateStr}</span>
+            ${isToday ? `<span style="margin-left:8px;background:var(--blue);color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;">AUJOURD'HUI</span>` : ""}
+          </div>
+          <span style="font-size:12px;color:var(--text-3);">${slotsToUse.length} publication(s)</span>
+        </div>`;
+ 
+    slotsToUse.forEach((slot, si) => {
+      const platform = platforms[si % platforms.length] || "Reddit";
+      const kw = topKw[postIdx % topKw.length] || "recrutement";
+      const types = ["Question", "Storytelling", "Opinion"];
+      const postType = types[(postIdx + d + si) % types.length];
+      const templateFn = postTemplates[platform]?.[postType] || postTemplates["Reddit"][postType];
+      const contenu = templateFn ? templateFn(kw) : `Post sur ${kw} — [Rédige ton contenu ici]`;
+      const titre = contenu.split("\n")[0].replace(/\*\*/g,"").trim().substring(0, 60);
+ 
+      window._planningPosts[postIdx] = contenu;
+ 
+      html += `
+        <div style="padding:14px 16px;border-top:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--blue);">🕐 ${slot.hour}h00</span>
+              <span style="font-size:11px;background:var(--surface);border:1px solid var(--border);padding:2px 8px;border-radius:20px;">${platform}</span>
+              <span style="font-size:11px;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:20px;font-weight:600;">${postType}</span>
+              <span style="font-size:11px;background:var(--green-light);color:var(--green);padding:2px 8px;border-radius:20px;">🏷️ ${kw}</span>
+              ${slot.avg > 0 ? `<span style="font-size:11px;color:var(--text-3);">Score estimé : ${slot.avg.toFixed(1)}</span>` : ""}
+            </div>
+          </div>
+          <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--text);">📌 ${titre}...</div>
+          <details>
+            <summary style="cursor:pointer;font-size:13px;color:var(--blue);font-weight:600;user-select:none;">✍️ Voir le post complet</summary>
+            <div style="margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;line-height:1.8;color:var(--text-2);white-space:pre-wrap;font-family:var(--font);">${contenu.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+            <button onclick="copyPlanningPost(this,${postIdx})" style="margin-top:8px;background:var(--green-light);color:var(--green);border:1px solid var(--green);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);font-weight:600;">📋 Copier ce post</button>
+          </details>
+        </div>`;
+      postIdx++;
+    });
+ 
+    html += `</div>`;
+  }
+ 
+  return html;
+}
+ 
+function copyPlanningPost(btn, idx) {
+  const content = window._planningPosts?.[idx];
+  if (!content) return;
+  navigator.clipboard.writeText(content).then(() => {
+    btn.textContent = "✅ Copié !";
+    setTimeout(() => { btn.textContent = "📋 Copier ce post"; }, 2000);
+  });
 }
  
 /* =====================
