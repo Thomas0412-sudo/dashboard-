@@ -152,12 +152,19 @@
         <div class="page-header">
           <div>
             <h1>Planning de posts</h1>
-            <p class="page-sub">Calendrier de performance et générateur de posts</p>
+            <p class="page-sub">Planning intelligent basé sur tes performances</p>
           </div>
         </div>
 
+        <!-- PLANNING SEMAINE -->
         <div class="chart-card" style="margin-bottom:20px;">
-          <div class="chart-title">🗓️ Heatmap — Meilleurs créneaux pour publier</div>
+          <div class="chart-title">📅 Planning intelligent — 7 prochains jours</div>
+          <div id="weekly-planner"></div>
+        </div>
+
+        <!-- HEATMAP -->
+        <div class="chart-card" style="margin-bottom:20px;">
+          <div class="chart-title">🔥 Heatmap — Meilleurs créneaux historiques</div>
           <div id="calendar-grid"></div>
         </div>
 
@@ -167,7 +174,7 @@
             <div id="best-slots"></div>
           </div>
           <div class="planning-card">
-            <h3>✍️ Générer un post complet</h3>
+            <h3>✍️ Générer un post sur mesure</h3>
             <div class="idea-form">
               <select id="idea-platform" style="padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:14px;background:var(--surface-2);color:var(--text);outline:none;">
                 <option value="Reddit">Reddit</option>
@@ -176,12 +183,12 @@
                 <option value="Instagram">Instagram</option>
                 <option value="TikTok">TikTok</option>
               </select>
-              <input type="text" id="idea-topic" placeholder="Ex: salaire, histoire d'horreur, meilleures vacances..." />
+              <input type="text" id="idea-topic" placeholder="Ex: salaire, entretien, reconversion..." />
               <button id="generate-idea-btn" class="btn-primary">✦ Générer des idées + posts</button>
             </div>
             <div id="idea-loading" class="ai-loading hidden">
               <div class="loading-spinner"></div>
-              <p>Analyse des tendances Reddit en cours...</p>
+              <p>Analyse des tendances en cours...</p>
             </div>
             <div id="idea-result"></div>
           </div>
