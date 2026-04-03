@@ -775,15 +775,15 @@ function renderCalendrierSection() {
     .slice(0, 15);
  
   // Meilleurs jours selon les données — on publie seulement ces jours-là
-  const joursByScore = {};
+  const joursByScore2 = {};
   posts.forEach(p => {
-    if (!joursByScore[p.jour]) joursByScore[p.jour] = { total: 0, count: 0 };
-    joursByScore[p.jour].total += p.score;
-    joursByScore[p.jour].count++;
+    if (!joursByScore2[p.jour]) joursByScore2[p.jour] = { total: 0, count: 0 };
+    joursByScore2[p.jour].total += p.score;
+    joursByScore2[p.jour].count++;
   });
-  const meilleurJours = Object.keys(joursByScore)
-    .sort((a,b) => (joursByScore[b].total/joursByScore[b].count) - (joursByScore[a].total/joursByScore[a].count))
-    .slice(0, 4); // Max 4 jours actifs sur 7
+  const meilleurJours = Object.keys(joursByScore2)
+    .sort((a,b) => (joursByScore2[b].total/joursByScore2[b].count) - (joursByScore2[a].total/joursByScore2[a].count))
+    .slice(0, 4);
  
   const bestSlot = topSlots[0];
   const totalPostsSemaine = meilleurJours.length + 1; // ~1-2 posts/jour actif
