@@ -26,6 +26,7 @@
           <li data-section="stats"><span class="nav-icon">📊</span> Statistiques</li>
           <li data-section="ia"><span class="nav-icon">✦</span> Analyse IA</li>
           <li data-section="general"><span class="nav-icon">◈</span> Analyse générale</li>
+          <li data-section="calendrier"><span class="nav-icon">🗓️</span> Calendrier</li>
           <li data-section="planning"><span class="nav-icon">📅</span> Planning</li>
           <li data-section="donnees"><span class="nav-icon">⊞</span> Données</li>
         </ul>
@@ -147,6 +148,18 @@
         <div id="global-insights"></div>
       </section>
 
+      <!-- CALENDRIER -->
+      <section class="section hidden" id="section-calendrier">
+        <div class="page-header">
+          <div>
+            <h1>Calendrier éditorial 🗓️</h1>
+            <p class="page-sub">Vision globale de ta semaine de publications</p>
+          </div>
+          <button onclick="renderCalendrierSection()" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-mid);padding:8px 16px;border-radius:var(--radius);font-family:var(--font);font-size:13px;cursor:pointer;font-weight:600;">🔄 Regénérer</button>
+        </div>
+        <div id="calendrier-content"></div>
+      </section>
+
       <!-- PLANNING -->
       <section class="section hidden" id="section-planning">
         <div class="page-header">
@@ -156,13 +169,11 @@
           </div>
         </div>
 
-        <!-- PLANNING SEMAINE -->
         <div class="chart-card" style="margin-bottom:20px;">
           <div class="chart-title">📅 Planning intelligent — 7 prochains jours</div>
           <div id="weekly-planner"></div>
         </div>
 
-        <!-- HEATMAP -->
         <div class="chart-card" style="margin-bottom:20px;">
           <div class="chart-title">🔥 Heatmap — Meilleurs créneaux historiques</div>
           <div id="calendar-grid"></div>
