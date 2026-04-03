@@ -781,19 +781,19 @@ function renderCalendrierSection() {
     joursByScore2[p.jour].total += p.score;
     joursByScore2[p.jour].count++;
   });
-  const meilleurJours = Object.keys(joursByScore2)
+  const meilleurJours2 = Object.keys(joursByScore2)
     .sort((a,b) => (joursByScore2[b].total/joursByScore2[b].count) - (joursByScore2[a].total/joursByScore2[a].count))
     .slice(0, 4);
  
   const bestSlot = topSlots[0];
-  const totalPostsSemaine = meilleurJours.length + 1; // ~1-2 posts/jour actif
+  const totalPostsSemaine = meilleurJours2.length + 1;
  
   let html = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
       <div class="stat-card" data-color="blue">
         <div class="stat-label">Posts cette semaine</div>
         <div class="stat-value">~${totalPostsSemaine}</div>
-        <div class="stat-trend">${meilleurJours.length} jours actifs</div>
+        <div class="stat-trend">${meilleurJours2.length} jours actifs</div>
       </div>
       <div class="stat-card" data-color="green">
         <div class="stat-label">Meilleur créneau</div>
@@ -822,9 +822,9 @@ function renderCalendrierSection() {
     dateObj.setDate(today.getDate() + d);
     const dateStr = dateObj.toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
     const isToday = d === 0;
-    const isActif = meilleurJours.includes(jourNom);
+    const isActif = meilleurJours2.includes(jourNom);
     // Le meilleur jour a 2 posts, les autres 1
-    const nbPosts = isActif ? (jourNom === meilleurJours[0] ? 2 : 1) : 0;
+    const nbPosts = isActif ? (jourNom === meilleurJours2[0] ? 2 : 1) : 0;
     const daySlots = topSlots.filter(s => s.day === jourNom).slice(0, nbPosts);
     const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, nbPosts);
  
@@ -861,13 +861,13 @@ function renderCalendrierSection() {
   for (let d = 0; d < 7; d++) {
     const dayIdx = (todayIdx + d) % 7;
     const jourNom = joursOrdre[dayIdx];
-    if (!meilleurJours.includes(jourNom)) continue; // Jours de repos ignorés
+    if (!meilleurJours2.includes(jourNom)) continue; // Jours de repos ignorés
  
     const dateObj = new Date(today);
     dateObj.setDate(today.getDate() + d);
     const dateStr = dateObj.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
     const isToday = d === 0;
-    const nbPosts = jourNom === meilleurJours[0] ? 2 : 1;
+    const nbPosts = jourNom === meilleurJours2[0] ? 2 : 1;
     const daySlots = topSlots.filter(s => s.day === jourNom).slice(0, nbPosts);
     const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, nbPosts);
  
