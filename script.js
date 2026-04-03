@@ -1,3 +1,6 @@
+
+Copier
+
 /* =====================
    CONFIG GOOGLE SHEETS
 ===================== */
@@ -742,8 +745,19 @@ function renderCalendrierSection() {
     .map(s => ({ ...s, avg: s.total / s.count }))
     .sort((a,b) => b.avg - a.avg);
  
-  const avgPostsPerDay = Math.max(1, Math.round(posts.length / 7));
-  const postsPerDay = Math.min(avgPostsPerDay, 3);
+  // Fréquence : 1 post tous les 2 jours, max 2 par jour sur les jours actifs
+  // On publie seulement 4 jours sur 7 (les meilleurs jours selon les données)
+  const joursByScore = {};
+  posts.forEach(p => {
+    if (!joursByScore[p.jour]) joursByScore[p.jour] = { total: 0, count: 0 };
+    joursByScore[p.jour].total += p.score;
+    joursByScore[p.jour].count++;
+  });
+  const meilleurJours = Object.keys(joursByScore)
+    .sort((a,b) => (joursByScore[b].total/joursByScore[b].count) - (joursByScore[a].total/joursByScore[a].count))
+    .slice(0, 4); // Les 4 meilleurs jours seulement
+ 
+  const postsParJourActif = 1; // 1 post par défaut, 2 si c'est le meilleur jour
  
   // Plateformes utilisées
   const platformCount = {};
@@ -761,19 +775,28 @@ function renderCalendrierSection() {
   const topKw = Object.keys(keywordMap)
     .filter(k => keywordMap[k].count >= 2)
     .sort((a,b) => (keywordMap[b].total/keywordMap[b].count) - (keywordMap[a].total/keywordMap[a].count))
-    .slice(0, 10);
+    .slice(0, 15);
  
-  // Résumé stats
-  const totalPostsSemaine = postsPerDay * 7;
+  // Meilleurs jours selon les données — on publie seulement ces jours-là
+  const joursByScore = {};
+  posts.forEach(p => {
+    if (!joursByScore[p.jour]) joursByScore[p.jour] = { total: 0, count: 0 };
+    joursByScore[p.jour].total += p.score;
+    joursByScore[p.jour].count++;
+  });
+  const meilleurJours = Object.keys(joursByScore)
+    .sort((a,b) => (joursByScore[b].total/joursByScore[b].count) - (joursByScore[a].total/joursByScore[a].count))
+    .slice(0, 4); // Max 4 jours actifs sur 7
+ 
   const bestSlot = topSlots[0];
+  const totalPostsSemaine = meilleurJours.length + 1; // ~1-2 posts/jour actif
  
   let html = `
-    <!-- RÉSUMÉ SEMAINE -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
       <div class="stat-card" data-color="blue">
         <div class="stat-label">Posts cette semaine</div>
-        <div class="stat-value">${totalPostsSemaine}</div>
-        <div class="stat-trend">${postsPerDay} par jour</div>
+        <div class="stat-value">~${totalPostsSemaine}</div>
+        <div class="stat-trend">${meilleurJours.length} jours actifs</div>
       </div>
       <div class="stat-card" data-color="green">
         <div class="stat-label">Meilleur créneau</div>
@@ -792,7 +815,6 @@ function renderCalendrierSection() {
       </div>
     </div>
  
-    <!-- VUE CALENDRIER SEMAINE -->
     <div class="chart-card" style="margin-bottom:20px;">
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">`;
  
@@ -803,30 +825,28 @@ function renderCalendrierSection() {
     dateObj.setDate(today.getDate() + d);
     const dateStr = dateObj.toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
     const isToday = d === 0;
- 
-    const daySlots = topSlots
-      .filter(s => s.day === jourNom)
-      .slice(0, postsPerDay);
-    const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, postsPerDay);
+    const isActif = meilleurJours.includes(jourNom);
+    // Le meilleur jour a 2 posts, les autres 1
+    const nbPosts = isActif ? (jourNom === meilleurJours[0] ? 2 : 1) : 0;
+    const daySlots = topSlots.filter(s => s.day === jourNom).slice(0, nbPosts);
+    const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, nbPosts);
  
     html += `
-      <div style="border:2px solid ${isToday ? "var(--blue)" : "var(--border)"};border-radius:var(--radius);overflow:hidden;">
-        <div style="background:${isToday ? "var(--blue)" : "var(--surface-2)"};color:${isToday ? "white" : "var(--text)"};padding:8px;text-align:center;">
+      <div style="border:2px solid ${isToday ? "var(--blue)" : isActif ? "var(--green)" : "var(--border)"};border-radius:var(--radius);overflow:hidden;opacity:${isActif ? "1" : "0.45"};">
+        <div style="background:${isToday ? "var(--blue)" : isActif ? "var(--green-light)" : "var(--surface-2)"};color:${isToday ? "white" : "var(--text)"};padding:8px;text-align:center;">
           <div style="font-weight:700;font-size:13px;text-transform:capitalize;">${jourNom.substring(0,3).toUpperCase()}</div>
           <div style="font-size:11px;opacity:0.8;">${dateStr}</div>
           ${isToday ? `<div style="font-size:9px;margin-top:2px;background:white;color:var(--blue);border-radius:10px;padding:1px 6px;font-weight:700;">AUJOURD'HUI</div>` : ""}
+          ${!isActif ? `<div style="font-size:9px;color:var(--text-3);margin-top:2px;">repos</div>` : ""}
         </div>
         <div style="padding:6px;">
           ${slotsToUse.map((s, si) => {
-            const platform = platforms[si % platforms.length] || "Reddit";
-            const kw = topKw[(d + si) % topKw.length] || "post";
-            const types = ["❓", "📖", "💬"];
-            const typeLabels = ["Question", "Story", "Opinion"];
-            const ti = (d + si) % 3;
+            const tplIdx = (d * 3 + si * 4) % ALL_TEMPLATES.length;
+            const kw = topKw[(d * 2 + si) % Math.max(topKw.length, 1)] || "post";
             return `<div style="background:var(--surface-2);border-radius:6px;padding:6px 8px;margin-bottom:4px;font-size:11px;">
               <div style="font-weight:700;color:var(--blue);">${s.hour}h00</div>
-              <div style="color:var(--text-2);">${types[ti]} ${typeLabels[ti]}</div>
-              <div style="color:var(--text-3);font-size:10px;">${platform} · ${kw}</div>
+              <div style="color:var(--text-2);">${ALL_TEMPLATES[tplIdx].type}</div>
+              <div style="color:var(--text-3);font-size:10px;">${platforms[0] || "Reddit"} · ${kw}</div>
             </div>`;
           }).join("")}
         </div>
@@ -835,49 +855,39 @@ function renderCalendrierSection() {
  
   html += `</div></div>`;
  
-  // LISTE DÉTAILLÉE PAR JOUR
-  html += `<div class="chart-card">
-    <div style="font-weight:700;font-size:15px;margin-bottom:16px;">📋 Détail des publications</div>`;
+  // LISTE DÉTAILLÉE — uniquement les jours actifs
+  html += `<div class="chart-card"><div style="font-weight:700;font-size:15px;margin-bottom:16px;">📋 Détail des publications</div>`;
  
   window._calPosts = {};
   let calIdx = 0;
  
-  const postTemplatesSimple = {
-    "Question": (kw, platform) => platform === "LinkedIn"
-      ? `${kw} — j'ai besoin de votre avis honnête.\n\nDepuis plusieurs années dans ce domaine, j'observe que ce sujet divise vraiment.\n\nMa position : [ta position en 1 phrase claire]\n\nMais je veux comprendre votre réalité :\n→ Comment vous vivez ${kw} au quotidien ?\n→ Qu'est-ce qui fonctionne vraiment ?\n→ Ce que vous changeriez ?\n\nJe réponds à chaque commentaire ✉️\n\n#${kw.replace(/\s+/g,"")} #Emploi #Recrutement`
-      : `**${kw} : vous avez déjà vécu ça ?**\n\nJe pose la question directement à cette communauté.\n\nDans mon expérience : [ta situation concrète liée à ${kw}]\n\nCe que je veux savoir :\n- Vous avez vécu quelque chose de similaire ?\n- Qu'est-ce qui vous a aidé ?\n- Ou qu'est-ce qui a aggravé les choses ?\n\nTous les témoignages sont les bienvenus 👇`,
-    "Storytelling": (kw, platform) => platform === "LinkedIn"
-      ? `Il y a [X] mois, j'ai vécu quelque chose qui a changé ma façon de voir ${kw}.\n\n[Situation de départ — sois précis]\n\nCe que j'ai appris :\n→ [Leçon 1 concrète]\n→ [Leçon 2 actionnable]\n→ [Leçon 3 surprenante]\n\nLe plus important : [ta conclusion forte]\n\nQu'est-ce que vous retenez de vos propres expériences ?\n\n#${kw.replace(/\s+/g,"")} #Experience #Authenticite`
-      : `**Ce que ${kw} m'a vraiment appris — témoignage sans filtre**\n\nJe n'aurais jamais pensé partager ça publiquement.\n\n[Ta situation de départ en 2-3 phrases]\n\nCe que j'ai fait :\n1. [Action 1 concrète]\n2. [Action 2]\n3. [Ce qui a tout changé]\n\nLa leçon : [ta conclusion personnelle et honnête]\n\nSi tu passes par là, tu n'es pas seul(e) 💙`,
-    "Opinion": (kw, platform) => platform === "LinkedIn"
-      ? `3 vérités sur ${kw} que personne n'ose dire.\n\n1️⃣ [Vérité 1 — surprenante]\n\n2️⃣ [Vérité 2 — qui dérange un peu]\n\n3️⃣ [Vérité 3 — la plus importante]\n\nJe préfère une conversation honnête à un like poli.\n\nVous êtes d'accord ? 👇\n\n#${kw.replace(/\s+/g,"")} #Opinion #Travail`
-      : `**Opinion impopulaire sur ${kw} — je m'attends à du débat**\n\n[Ton opinion tranchée en 1-2 phrases percutantes]\n\nVoici pourquoi :\n\n❌ Ce qu'on entend partout : [idée reçue 1]\n✅ La réalité : [vérité]\n\n❌ Ce qu'on entend partout : [idée reçue 2]\n✅ La réalité : [vérité]\n\nConvainquez-moi si je me trompe 👇`,
-  };
- 
   for (let d = 0; d < 7; d++) {
     const dayIdx = (todayIdx + d) % 7;
     const jourNom = joursOrdre[dayIdx];
+    if (!meilleurJours.includes(jourNom)) continue; // Jours de repos ignorés
+ 
     const dateObj = new Date(today);
     dateObj.setDate(today.getDate() + d);
     const dateStr = dateObj.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
     const isToday = d === 0;
- 
-    const daySlots = topSlots.filter(s => s.day === jourNom).slice(0, postsPerDay);
-    const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, postsPerDay);
+    const nbPosts = jourNom === meilleurJours[0] ? 2 : 1;
+    const daySlots = topSlots.filter(s => s.day === jourNom).slice(0, nbPosts);
+    const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, nbPosts);
  
     html += `
-      <div style="border-left:3px solid ${isToday ? "var(--blue)" : "var(--border)"};padding-left:16px;margin-bottom:20px;">
+      <div style="border-left:3px solid ${isToday ? "var(--blue)" : "var(--green)"};padding-left:16px;margin-bottom:20px;">
         <div style="font-weight:700;font-size:14px;margin-bottom:10px;text-transform:capitalize;">
-          ${isToday ? "🔵 " : ""}${dateStr}
+          ${isToday ? "🔵 " : "🟢 "}${dateStr}
           ${isToday ? `<span style="background:var(--blue);color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;margin-left:8px;">AUJOURD'HUI</span>` : ""}
         </div>`;
  
     slotsToUse.forEach((slot, si) => {
       const platform = platforms[si % platforms.length] || "Reddit";
-      const kw = topKw[(d * 3 + si) % topKw.length] || "recrutement";
-      const typeKeys = ["Question", "Storytelling", "Opinion"];
-      const postType = typeKeys[(d + si) % 3];
-      const contenu = postTemplatesSimple[postType](kw, platform);
+      const kw = topKw[(d * 2 + si * 3 + 1) % Math.max(topKw.length, 1)] || "recrutement";
+      const tplIdx = (d * 3 + si * 4 + d + si) % ALL_TEMPLATES.length;
+      const template = ALL_TEMPLATES[tplIdx];
+      const postType = template.type;
+      const contenu = template.fn(kw, platform);
       window._calPosts[calIdx] = contenu;
  
       html += `
@@ -1523,3 +1533,4 @@ document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => syncFromSheets(false), 1500);
   setInterval(() => syncFromSheets(false), 5 * 60 * 1000);
 });
+
