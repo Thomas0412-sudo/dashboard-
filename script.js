@@ -742,20 +742,6 @@ function renderCalendrierSection() {
     .map(s => ({ ...s, avg: s.total / s.count }))
     .sort((a,b) => b.avg - a.avg);
  
-  // Fréquence : 1 post tous les 2 jours, max 2 par jour sur les jours actifs
-  // On publie seulement 4 jours sur 7 (les meilleurs jours selon les données)
-  const joursByScore = {};
-  posts.forEach(p => {
-    if (!joursByScore[p.jour]) joursByScore[p.jour] = { total: 0, count: 0 };
-    joursByScore[p.jour].total += p.score;
-    joursByScore[p.jour].count++;
-  });
-  const meilleurJours = Object.keys(joursByScore)
-    .sort((a,b) => (joursByScore[b].total/joursByScore[b].count) - (joursByScore[a].total/joursByScore[a].count))
-    .slice(0, 4); // Les 4 meilleurs jours seulement
- 
-  const postsParJourActif = 1; // 1 post par défaut, 2 si c'est le meilleur jour
- 
   // Plateformes utilisées
   const platformCount = {};
   posts.forEach(p => { platformCount[p.platform] = (platformCount[p.platform] || 0) + 1; });
@@ -1530,4 +1516,3 @@ document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => syncFromSheets(false), 1500);
   setInterval(() => syncFromSheets(false), 5 * 60 * 1000);
 });
-
