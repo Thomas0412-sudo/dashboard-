@@ -2,17 +2,17 @@
    CONFIG GOOGLE SHEETS
 ===================== */
 const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbzopku3BQfw4wqJYy35K8Tg2jXb8b3_RGFYy0CD5dwEte1EqUzpFOmg9XETgYViXK5Ulg/exec";
- 
+
 /* =====================
    VARIABLES GLOBALES
 ===================== */
 let posts = JSON.parse(localStorage.getItem("posts")) || [];
 let charts = {};
- 
+
 function savePosts() {
   localStorage.setItem("posts", JSON.stringify(posts));
 }
- 
+
 /* =====================
    SCORE ADAPTATIF PAR PLATEFORME (sur 10)
 ===================== */
@@ -33,25 +33,25 @@ function calculateRawScore(platform, likes, comments, views) {
       return (ratio * views * 0.1) + (comments * 6) + (likes * 2) + (Math.log10(views + 1) * 15);
   }
 }
- 
+
 function normalizeScores(postsArray) {
   if (postsArray.length === 0) return postsArray;
- 
+
   const raws = postsArray.map(p => calculateRawScore(p.platform, p.likes, p.comments, p.views));
- 
+
   // Utiliser log pour réduire l'écart entre le post viral et les autres
   const logsRaws = raws.map(r => Math.log10(r + 1));
   const maxLog = Math.max(...logsRaws, 1);
   const minLog = Math.min(...logsRaws);
   const range = maxLog - minLog || 1;
- 
+
   return postsArray.map((p, i) => ({
     ...p,
     // Score entre 1 et 10 avec distribution équilibrée
     score: Math.round(((logsRaws[i] - minLog) / range) * 9 * 10) / 10 + 1
   }));
 }
- 
+
 /* =====================
    SYNC GOOGLE SHEETS
 ===================== */
@@ -65,7 +65,7 @@ function showSyncToast(message, isError = false) {
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3500);
 }
- 
+
 function convertSheetRow(row) {
   let dateStr = "";
   if (row["Date publication"]) {
@@ -84,57 +84,63 @@ function convertSheetRow(row) {
         : `${parts[0]}-${parts[1]}-${parts[2]}`;
     }
   }
- 
+
   let timeStr = "09:00";
   if (row["Heure"]) {
     const raw = String(row["Heure"]).trim();
     if (raw.match(/^\d{1,2}:\d{2}/)) timeStr = raw.substring(0, 5).padStart(5, "0");
     else if (raw.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/)) timeStr = raw.split(" ")[1].substring(0, 5);
   }
- 
+
   const likes = Number(row["Likes"]) || 0;
   const comments = Number(row["Commentaires"]) || 0;
   const views = Number(row["Vues"]) || 0;
   const platform = String(row["Plateforme"] || "Reddit");
   const engagement = likes + comments;
- 
+
   let jour = String(row["Jour (auto)"] || "").trim();
   if (!jour && dateStr) jour = new Date(dateStr).toLocaleDateString("fr-FR", { weekday: "long" });
- 
+
   const timeParts = timeStr.split(":");
   const heureDecimale = Number(timeParts[0]) + Number(timeParts[1] || 0) / 60;
- 
-  return { platform, date: dateStr, time: timeStr, author: String(row["Auteur"] || ""), title: String(row["Titre"] || ""), likes, comments, views, engagement, jour, score: 0, heureDecimale, fromSheets: true };
+
+  // --- Nouvelles colonnes du Sheet ---
+  const corps = String(row["Corps"] || "");
+  const hook = String(row["Hook"] || "").trim();
+  const format = String(row["Format"] || "").trim();
+  const longueur = Number(row["Longueur (auto)"]) || 0;
+
+  return { platform, date: dateStr, time: timeStr, author: String(row["Auteur"] || ""), title: String(row["Titre"] || ""), likes, comments, views, engagement, jour, score: 0, heureDecimale, corps, hook, format, longueur, fromSheets: true };
 }
- 
+
 async function syncFromSheets(showFeedback = true) {
   const syncBtn = document.getElementById("sync-btn");
   const syncStatus = document.getElementById("sync-status");
- 
+
   if (syncBtn) {
     syncBtn.disabled = true;
     syncBtn.innerHTML = `<span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:6px;"></span>Sync...`;
   }
- 
+
   try {
     const response = await fetch(SHEETS_API_URL);
     if (!response.ok) throw new Error("Erreur réseau");
     const json = await response.json();
     if (!json.success || !json.data) throw new Error("Données invalides");
- 
+
     let sheetPosts = json.data.map(convertSheetRow).filter(p => p.title && p.title.length > 2);
     sheetPosts = normalizeScores(sheetPosts);
- 
+
     const manualPosts = posts.filter(p => !p.fromSheets);
     posts = [...sheetPosts, ...manualPosts];
     savePosts();
     refreshAll();
- 
+
     const now = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     if (syncStatus) { syncStatus.textContent = `✓ ${sheetPosts.length} posts · ${now}`; syncStatus.style.color = "#4ade80"; }
     if (syncBtn) { syncBtn.disabled = false; syncBtn.innerHTML = `🔄 Synchroniser`; }
     if (showFeedback) showSyncToast(`✅ ${sheetPosts.length} posts synchronisés !`);
- 
+
   } catch (err) {
     console.error("Sync error:", err);
     if (syncStatus) { syncStatus.textContent = "❌ Erreur sync"; syncStatus.style.color = "#f87171"; }
@@ -142,7 +148,7 @@ async function syncFromSheets(showFeedback = true) {
     if (showFeedback) showSyncToast("❌ Erreur de connexion", true);
   }
 }
- 
+
 /* =====================
    DATE D'ACCUEIL
 ===================== */
@@ -150,7 +156,7 @@ const dateEl = document.getElementById("current-date");
 if (dateEl) {
   dateEl.textContent = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
- 
+
 /* =====================
    NAVIGATION
 ===================== */
@@ -164,11 +170,11 @@ const sections = {
   planning: document.getElementById("section-planning"),
   donnees: document.getElementById("section-donnees"),
 };
- 
+
 function hideAllSections() {
   Object.values(sections).forEach(s => s && s.classList.add("hidden"));
 }
- 
+
 function showSection(key) {
   hideAllSections();
   if (sections[key]) sections[key].classList.remove("hidden");
@@ -178,7 +184,7 @@ function showSection(key) {
   if (key === "general") document.getElementById("global-insights").innerHTML = generateGlobalInsights();
   if (key === "calendrier") renderCalendrierSection();
 }
- 
+
 menuItems.forEach(item => {
   item.addEventListener("click", () => {
     menuItems.forEach(i => i.classList.remove("active"));
@@ -186,7 +192,7 @@ menuItems.forEach(item => {
     showSection(item.dataset.section);
   });
 });
- 
+
 /* =====================
    UTILITAIRES
 ===================== */
@@ -198,7 +204,13 @@ function detectPostType(title) {
   if (t.includes("comment") || t.includes("astuce") || t.includes("conseil")) return "Conseil";
   return "Post mixte";
 }
- 
+
+function getPostType(post) {
+  // Utilise le Format tagué dans le Sheet ; sinon devine depuis le titre (posts manuels)
+  if (post && post.format && post.format.trim()) return post.format.trim();
+  return detectPostType(post && post.title ? post.title : "");
+}
+
 function extractKeywords(title) {
   const stopwords = [
     // Articles et déterminants
@@ -216,7 +228,7 @@ function extractKeywords(title) {
     "voilà", "voici", "chez", "part", "fois", "coup", "bout", "aide", "fait",
     "mise", "mise", "pris", "doit", "peut", "fais", "dites", "dits"
   ];
- 
+
   return title
     .toLowerCase()
     .replace(/[.,!?…:;«»"'()[\]{}\/\\]/g, " ")
@@ -228,7 +240,7 @@ function extractKeywords(title) {
       !/^(https?|www)/.test(w)           // Pas une URL
     );
 }
- 
+
 function getBestDayStats() {
   if (posts.length < 2) return null;
   const byDay = {};
@@ -243,7 +255,7 @@ function getBestDayStats() {
   });
   return { bestDay: best, bestAvg };
 }
- 
+
 function getBestHourStats() {
   if (posts.length < 2) return null;
   const byHour = {};
@@ -259,19 +271,19 @@ function getBestHourStats() {
   });
   return { bestHour: best, bestAvg };
 }
- 
+
 function getSimilarPostsScore(keywords) {
   const similar = posts.filter(p => keywords.some(k => p.title.toLowerCase().includes(k)));
   if (similar.length === 0) return null;
   return { count: similar.length, avgScore: similar.reduce((a, b) => a + b.score, 0) / similar.length };
 }
- 
+
 /* =====================
    TABLEAU
 ===================== */
 const dataBody = document.getElementById("data-body");
 const emptyState = document.getElementById("empty-state");
- 
+
 function renderTable() {
   dataBody.innerHTML = "";
   if (posts.length === 0) {
@@ -280,12 +292,12 @@ function renderTable() {
     return;
   }
   emptyState && emptyState.classList.add("hidden");
- 
+
   posts.forEach((post, index) => {
     const row = document.createElement("tr");
     const pct = post.score / 10;
     const scoreClass = pct > 0.6 ? "high" : pct > 0.3 ? "mid" : "low";
- 
+
     // Formater la date en jj/mm/aaaa
     let dateDisplay = post.date;
     if (post.date) {
@@ -320,7 +332,7 @@ function renderTable() {
   });
   updateStats();
 }
- 
+
 function promptViews(index) {
   const post = posts[index];
   const views = prompt(`Combien de vues pour ce post ?\n\n"${post.title.substring(0, 60)}..."`);
@@ -334,7 +346,7 @@ function promptViews(index) {
   savePosts();
   renderTable();
 }
- 
+
 /* =====================
    AJOUT / MODIFICATION
 ===================== */
@@ -342,14 +354,14 @@ const addPostBtn = document.getElementById("add-post");
 const cancelEditBtn = document.getElementById("cancel-edit");
 const formTitle = document.getElementById("form-title");
 let editIndex = null;
- 
+
 function clearForm() {
   ["post-platform","post-date","post-time","post-author","post-title","post-likes","post-comments","post-views"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
 }
- 
+
 addPostBtn.addEventListener("click", () => {
   const platform = document.getElementById("post-platform").value;
   const date = document.getElementById("post-date").value;
@@ -359,9 +371,9 @@ addPostBtn.addEventListener("click", () => {
   const likes = Number(document.getElementById("post-likes").value) || 0;
   const comments = Number(document.getElementById("post-comments").value) || 0;
   const views = Number(document.getElementById("post-views").value) || 0;
- 
+
   if (!platform || !date || !time || !author || !title) { alert("Merci de remplir tous les champs."); return; }
- 
+
   const engagement = likes + comments;
   const jour = new Date(date).toLocaleDateString("fr-FR", { weekday: "long" });
   const heureDecimale = Number(time.split(":")[0]) + Number(time.split(":")[1]) / 60;
@@ -369,45 +381,45 @@ addPostBtn.addEventListener("click", () => {
   const allRaws = posts.map(p => calculateRawScore(p.platform, p.likes, p.comments, p.views));
   const maxRaw = Math.max(...allRaws, rawScore, 1);
   const score = Math.round((rawScore / maxRaw) * 100) / 10;
- 
+
   const newPost = { platform, date, time, author, title, likes, comments, views, engagement, jour, score, heureDecimale };
- 
+
   if (editIndex === null) {
     posts.push(newPost);
   } else {
     posts[editIndex] = newPost;
     exitEditMode();
   }
- 
+
   // Re-normaliser tous les scores
   posts = normalizeScores(posts);
   savePosts();
   renderTable();
   clearForm();
 });
- 
+
 cancelEditBtn && cancelEditBtn.addEventListener("click", () => { exitEditMode(); clearForm(); });
- 
+
 function exitEditMode() {
   editIndex = null;
   addPostBtn.textContent = "Ajouter";
   formTitle.textContent = "Ajouter un post manuellement";
   cancelEditBtn && cancelEditBtn.classList.add("hidden");
 }
- 
+
 /* =====================
    CLICS TABLEAU
 ===================== */
 document.addEventListener("click", e => {
   const target = e.target;
- 
+
   if (target.classList.contains("delete-btn")) {
     if (!confirm("Supprimer ce post ?")) return;
     posts.splice(Number(target.dataset.index), 1);
     posts = normalizeScores(posts);
     savePosts(); renderTable(); return;
   }
- 
+
   if (target.classList.contains("edit-btn")) {
     const index = Number(target.dataset.index);
     const post = posts[index];
@@ -428,7 +440,7 @@ document.addEventListener("click", e => {
     if (donneeItem) { donneeItem.classList.add("active"); showSection("donnees"); }
     return;
   }
- 
+
   if (target.classList.contains("analyze-btn")) {
     const post = posts[Number(target.dataset.index)];
     menuItems.forEach(i => i.classList.remove("active"));
@@ -439,7 +451,7 @@ document.addEventListener("click", e => {
     return;
   }
 });
- 
+
 /* =====================
    STATS ACCUEIL
 ===================== */
@@ -458,7 +470,7 @@ function updateStats() {
   const dayStats = getBestDayStats();
   document.getElementById("best-day-home").textContent = dayStats ? dayStats.bestDay : "—";
 }
- 
+
 /* =====================
    EXPORT CSV
 ===================== */
@@ -473,11 +485,11 @@ function exportCSV() {
   a.href = url; a.download = `jobsansfiltre_${new Date().toISOString().slice(0,10)}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
- 
+
 document.getElementById("export-csv").addEventListener("click", exportCSV);
 const exportBtn2 = document.getElementById("export-csv-2");
 if (exportBtn2) exportBtn2.addEventListener("click", exportCSV);
- 
+
 const syncBtnEl = document.getElementById("sync-btn");
 if (syncBtnEl) syncBtnEl.addEventListener("click", () => syncFromSheets(true));
 /* =====================
@@ -487,7 +499,7 @@ const analyzeBtn = document.getElementById("analyze-btn");
 const aiResult = document.getElementById("ai-result");
 const inputText = document.getElementById("input-text");
 const aiLoading = document.getElementById("ai-loading");
- 
+
 const SIGNALS_POSITIFS = {
   question: ["?", "selon vous", "votre avis", "vous pensez"],
   emotion: ["incroyable", "choqué", "honte", "fier", "épuisé", "absurde", "scandale"],
@@ -496,7 +508,7 @@ const SIGNALS_POSITIFS = {
   polémique: ["personne ne dit", "vérité", "sans filtre", "réalité", "arnaque", "injuste"],
   conseil: ["comment", "astuce", "conseil", "guide", "méthode"],
 };
- 
+
 const CONSEILS_PAR_TYPE = {
   "Question": "Les questions directes génèrent 40% plus de commentaires. Assure-toi que ta question est ouverte.",
   "Storytelling": "Les posts storytelling ont le meilleur taux de lecture. Commence par l'élément le plus émotionnel.",
@@ -504,7 +516,7 @@ const CONSEILS_PAR_TYPE = {
   "Conseil": "Les posts conseils fonctionnent mieux avec un résultat concret dans le titre.",
   "Post mixte": "Choisis un angle dominant : question, récit ou conseil.",
 };
- 
+
 const TEMPLATES_TITRES = [
   (kw) => `Pourquoi ${kw} est le vrai problème du recrutement en France`,
   (kw) => `J'ai vécu ça : ${kw} et ce que j'ai appris`,
@@ -512,26 +524,26 @@ const TEMPLATES_TITRES = [
   (kw) => `La vérité sur ${kw} (témoignage sans filtre)`,
   (kw) => `Comment j'ai géré ${kw} et ce que ça m'a appris`,
 ];
- 
+
 function analyserTitreAvance(titre) {
   const t = titre.toLowerCase();
   const mots = extractKeywords(titre);
   let score = 3.0;
   const pointsForts = [], pointsFaibles = [];
- 
+
   if (titre.length >= 40 && titre.length <= 100) { score += 1.2; pointsForts.push("Longueur idéale"); }
   else if (titre.length < 15) { score -= 1.5; pointsFaibles.push("Titre trop court"); }
   else if (titre.length > 130) { score -= 0.8; pointsFaibles.push("Titre trop long"); }
- 
+
   if (SIGNALS_POSITIFS.question.some(s => t.includes(s))) { score += 1.0; pointsForts.push("Format question → favorise les commentaires"); }
   if (SIGNALS_POSITIFS.emotion.some(s => t.includes(s))) { score += 1.3; pointsForts.push("Mot émotionnel → fort impact sur le clic"); }
   if (SIGNALS_POSITIFS.storytelling.some(s => t.includes(s))) { score += 1.1; pointsForts.push("Angle storytelling → très performant sur Reddit"); }
   if (SIGNALS_POSITIFS.chiffres.some(r => r instanceof RegExp ? r.test(t) : t.includes(r))) { score += 0.9; pointsForts.push("Chiffre concret → crédibilité et curiosité"); }
   if (SIGNALS_POSITIFS.polémique.some(s => t.includes(s))) { score += 1.2; pointsForts.push("Ton polémique → très viral sur r/jobsansfiltre"); }
   if (SIGNALS_POSITIFS.conseil.some(s => t.includes(s))) { score += 0.7; pointsForts.push("Format conseil → bon taux de sauvegarde"); }
- 
+
   if (mots.length < 2) pointsFaibles.push("Peu de mots-clés forts");
- 
+
   score = Math.min(10, Math.max(0, score));
   const potentiel = score >= 6.5 ? "Élevé" : score >= 4 ? "Moyen" : "Faible";
   const motCle = mots[0] || "recrutement";
@@ -542,7 +554,7 @@ function analyserTitreAvance(titre) {
   const momentConseil = bestDay && bestHour
     ? `D'après tes données, publie le ${bestDay.bestDay} vers ${bestHour.bestHour}h.`
     : "Publie en semaine entre 12h-14h ou le soir vers 20h-22h.";
- 
+
   return {
     type, score_estime: Math.round(score * 10) / 10, potentiel,
     points_forts: pointsForts.length ? pointsForts : ["Structure correcte"],
@@ -551,7 +563,7 @@ function analyserTitreAvance(titre) {
     meilleur_moment: momentConseil, conseil_global: CONSEILS_PAR_TYPE[type] || CONSEILS_PAR_TYPE["Post mixte"],
   };
 }
- 
+
 function runAIAnalysis(title) {
   const cleanTitle = title.trim();
   if (!cleanTitle) { alert("Colle un titre à analyser."); return; }
@@ -563,7 +575,7 @@ function runAIAnalysis(title) {
     renderAIResult(data);
   }, 700);
 }
- 
+
 function renderAIResult(data) {
   const potentielColor = data.potentiel === "Élevé" ? "var(--green)" : data.potentiel === "Moyen" ? "var(--blue)" : "var(--text-3)";
   const potentielBg = data.potentiel === "Élevé" ? "var(--green-light)" : data.potentiel === "Moyen" ? "var(--blue-light)" : "var(--surface-2)";
@@ -593,7 +605,7 @@ function renderAIResult(data) {
       <div class="ai-card wide"><h3>🧠 Conseil expert</h3><p>${data.conseil_global}</p></div>
     </div>`;
 }
- 
+
 function copyTitle(el, title) {
   navigator.clipboard.writeText(title).then(() => {
     const orig = el.innerHTML;
@@ -602,23 +614,23 @@ function copyTitle(el, title) {
     setTimeout(() => { el.innerHTML = orig; el.style.borderColor = ""; el.style.color = ""; }, 1500);
   });
 }
- 
+
 analyzeBtn && analyzeBtn.addEventListener("click", () => runAIAnalysis(inputText.value));
- 
+
 /* =====================
    ANALYSE GÉNÉRALE
 ===================== */
 function generateGlobalInsights() {
   if (posts.length === 0) return `<div class="ai-card"><p style="color:var(--text-3)">Aucune donnée. Clique sur <strong>🔄 Synchroniser</strong>.</p></div>`;
- 
+
   // Performance par type
   const typeScores = {};
   posts.forEach(p => {
-    const type = detectPostType(p.title);
+    const type = getPostType(p);
     if (!typeScores[type]) typeScores[type] = { total: 0, count: 0 };
     typeScores[type].total += p.score; typeScores[type].count++;
   });
- 
+
   // Mots-clés — avec score moyen ET nombre d'occurrences minimum
   const keywordMap = {};
   posts.forEach(p => {
@@ -632,26 +644,81 @@ function generateGlobalInsights() {
       keywordMap[k].posts.push(p.score);
     });
   });
- 
+
   // Filtrer : au moins 2 occurrences pour être significatif
   const validKeywords = Object.keys(keywordMap).filter(k => keywordMap[k].count >= 2);
- 
+
   // Top 5 mots qui performent le mieux (score moyen élevé)
   const topKeywords = validKeywords
     .sort((a,b) => (keywordMap[b].totalScore/keywordMap[b].count) - (keywordMap[a].totalScore/keywordMap[a].count))
     .slice(0, 5);
- 
+
   // Bottom 5 mots à éviter (score moyen faible)
   const weakKeywords = validKeywords
     .sort((a,b) => (keywordMap[a].totalScore/keywordMap[a].count) - (keywordMap[b].totalScore/keywordMap[b].count))
     .slice(0, 5);
- 
+
   const dayStats = getBestDayStats();
   const hourStats = getBestHourStats();
   const bestType = Object.keys(typeScores).sort((a,b) =>
     (typeScores[b].total/typeScores[b].count) - (typeScores[a].total/typeScores[a].count)
   )[0];
- 
+
+  // --- Analyse Hook : Oui vs Non ---
+  const hookStats = { Oui: { total: 0, count: 0 }, Non: { total: 0, count: 0 } };
+  posts.forEach(p => {
+    const h = (p.hook || "").trim();
+    if (h === "Oui") { hookStats.Oui.total += p.score; hookStats.Oui.count++; }
+    else if (h === "Non") { hookStats.Non.total += p.score; hookStats.Non.count++; }
+  });
+  const hookOuiAvg = hookStats.Oui.count ? hookStats.Oui.total / hookStats.Oui.count : 0;
+  const hookNonAvg = hookStats.Non.count ? hookStats.Non.total / hookStats.Non.count : 0;
+  const hookHasData = hookStats.Oui.count > 0 && hookStats.Non.count > 0;
+  const hookGain = hookNonAvg > 0 ? Math.round(((hookOuiAvg - hookNonAvg) / hookNonAvg) * 100) : 0;
+
+  let hookCardHtml = "";
+  if (hookHasData) {
+    const maxHook = Math.max(hookOuiAvg, hookNonAvg, 1);
+    hookCardHtml = `
+      <div class="ai-card" style="grid-column:span 2;">
+        <h3>🎣 Impact du Hook (accroche)</h3>
+        <p style="font-size:11px;color:var(--text-3);margin-bottom:14px;">Score moyen selon que la 1ère phrase accroche ou non</p>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+              <span style="font-weight:600;color:var(--green);">✅ Avec hook (${hookStats.Oui.count} posts)</span>
+              <span style="font-family:var(--font-mono);font-weight:700;color:var(--green);">${hookOuiAvg.toFixed(1)}</span>
+            </div>
+            <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden;">
+              <div style="height:100%;width:${(hookOuiAvg/maxHook)*100}%;background:var(--green);border-radius:5px;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+              <span style="font-weight:600;color:var(--text-3);">⚪ Sans hook (${hookStats.Non.count} posts)</span>
+              <span style="font-family:var(--font-mono);font-weight:700;color:var(--text-3);">${hookNonAvg.toFixed(1)}</span>
+            </div>
+            <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden;">
+              <div style="height:100%;width:${(hookNonAvg/maxHook)*100}%;background:var(--text-3);border-radius:5px;"></div>
+            </div>
+          </div>
+        </div>
+        <p style="font-size:14px;line-height:1.7;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+          ${hookGain > 0
+            ? `Tes posts avec une vraie accroche scorent <strong style="color:var(--green);">${hookGain}% de plus</strong> en moyenne. Le hook, c'est ton levier n°1 : soigne toujours ta 1ère phrase.`
+            : hookGain < 0
+              ? `Surprenant : tes posts <em>sans</em> hook marqué scorent mieux ici. Échantillon encore petit, à confirmer avec plus de données.`
+              : `Pas encore d'écart net entre les deux. Continue à taguer pour affiner.`}
+        </p>
+      </div>`;
+  } else {
+    hookCardHtml = `
+      <div class="ai-card" style="grid-column:span 2;">
+        <h3>🎣 Impact du Hook (accroche)</h3>
+        <p style="font-size:13px;color:var(--text-3);">Tague la colonne <strong>Hook</strong> (Oui/Non) sur tes posts dans Google Sheets pour débloquer cette analyse. Il faut au moins quelques posts dans chaque catégorie.</p>
+      </div>`;
+  }
+
   return `
     <div class="insights-grid">
       <div class="ai-card">
@@ -667,7 +734,7 @@ function generateGlobalInsights() {
             </div>
           </div>`).join("")}
       </div>
- 
+
       <div class="ai-card">
         <h3>🏷️ Mots-clés qui boostent</h3>
         <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Présents dans min. 2 posts performants</p>
@@ -680,7 +747,7 @@ function generateGlobalInsights() {
             <span style="font-family:var(--font-mono);font-weight:600;color:var(--green);">↑ ${(keywordMap[k].totalScore/keywordMap[k].count).toFixed(1)}</span>
           </div>`).join("")}
       </div>
- 
+
       <div class="ai-card">
         <h3>⚠️ Mots-clés à éviter</h3>
         <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Associés aux posts les moins performants</p>
@@ -690,19 +757,21 @@ function generateGlobalInsights() {
             <span style="font-family:var(--font-mono);font-weight:600;color:var(--red);">↓ ${(keywordMap[k].totalScore/keywordMap[k].count).toFixed(1)}</span>
           </div>`).join("")}
       </div>
- 
+
       <div class="ai-card">
         <h3>📅 Meilleur jour</h3>
         <div style="font-size:28px;font-weight:700;margin-bottom:4px;">${dayStats ? dayStats.bestDay : "—"}</div>
         <div style="font-size:13px;color:var(--text-3);">Score moyen : <strong>${dayStats ? dayStats.bestAvg.toFixed(1) : "—"}</strong></div>
       </div>
- 
+
       <div class="ai-card">
         <h3>⏰ Meilleure heure</h3>
         <div style="font-size:28px;font-weight:700;font-family:var(--font-mono);margin-bottom:4px;">${hourStats ? hourStats.bestHour + "h" : "—"}</div>
         <div style="font-size:13px;color:var(--text-3);">Score moyen : <strong>${hourStats ? hourStats.bestAvg.toFixed(1) : "—"}</strong></div>
       </div>
- 
+
+      ${hookCardHtml}
+
       <div class="ai-card" style="grid-column:span 2;">
         <h3>🧠 Synthèse stratégique</h3>
         <p style="font-size:15px;line-height:1.8;">
@@ -710,11 +779,12 @@ function generateGlobalInsights() {
           Publie de préférence le <strong>${dayStats ? dayStats.bestDay : "?"}</strong> vers <strong>${hourStats ? hourStats.bestHour + "h" : "?"}</strong>.
           ${topKeywords.length >= 2 ? `Les mots <strong>${topKeywords.slice(0,3).join("</strong>, <strong>")}</strong> sont associés à tes meilleurs posts.` : ""}
           ${weakKeywords.length >= 2 ? `Évite les titres avec <strong>${weakKeywords.slice(0,2).join("</strong> et <strong>")}</strong> qui performent moins bien.` : ""}
+          ${hookHasData && hookGain > 0 ? ` Et n'oublie pas : un bon hook = <strong style="color:var(--green);">+${hookGain}%</strong> de score.` : ""}
         </p>
       </div>
     </div>`;
 }
- 
+
 /* =====================
    CALENDRIER ÉDITORIAL
 ===================== */
@@ -725,12 +795,12 @@ function renderCalendrierSection() {
     el.innerHTML = `<div class="ai-card"><p style="color:var(--text-3);">Synchronise tes données d'abord pour générer le calendrier.</p></div>`;
     return;
   }
- 
+
   // Récupérer le planning généré
   const joursOrdre = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
   const today = new Date();
   const todayIdx = today.getDay() === 0 ? 6 : today.getDay() - 1;
- 
+
   // Calculer meilleurs créneaux
   const slotMap = {};
   posts.forEach(p => {
@@ -741,12 +811,12 @@ function renderCalendrierSection() {
   const topSlots = Object.values(slotMap)
     .map(s => ({ ...s, avg: s.total / s.count }))
     .sort((a,b) => b.avg - a.avg);
- 
+
   // Plateformes utilisées
   const platformCount = {};
   posts.forEach(p => { platformCount[p.platform] = (platformCount[p.platform] || 0) + 1; });
   const platforms = Object.keys(platformCount).sort((a,b) => platformCount[b] - platformCount[a]);
- 
+
   // Mots-clés performants
   const keywordMap = {};
   posts.forEach(p => {
@@ -759,7 +829,7 @@ function renderCalendrierSection() {
     .filter(k => keywordMap[k].count >= 2)
     .sort((a,b) => (keywordMap[b].total/keywordMap[b].count) - (keywordMap[a].total/keywordMap[a].count))
     .slice(0, 15);
- 
+
   // Meilleurs jours selon les données — on publie seulement ces jours-là
   const joursByScore2 = {};
   posts.forEach(p => {
@@ -770,10 +840,10 @@ function renderCalendrierSection() {
   const meilleurJours2 = Object.keys(joursByScore2)
     .sort((a,b) => (joursByScore2[b].total/joursByScore2[b].count) - (joursByScore2[a].total/joursByScore2[a].count))
     .slice(0, 4);
- 
+
   const bestSlot = topSlots[0];
   const totalPostsSemaine = meilleurJours2.length + 1;
- 
+
   let html = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;">
       <div class="stat-card" data-color="blue">
@@ -797,10 +867,10 @@ function renderCalendrierSection() {
         <div class="stat-trend">le plus performant</div>
       </div>
     </div>
- 
+
     <div class="chart-card" style="margin-bottom:20px;">
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">`;
- 
+
   for (let d = 0; d < 7; d++) {
     const dayIdx = (todayIdx + d) % 7;
     const jourNom = joursOrdre[dayIdx];
@@ -813,7 +883,7 @@ function renderCalendrierSection() {
     const nbPosts = isActif ? (jourNom === meilleurJours2[0] ? 2 : 1) : 0;
     const daySlots = topSlots.filter(s => s.day === jourNom).slice(0, nbPosts);
     const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, nbPosts);
- 
+
     html += `
       <div style="border:2px solid ${isToday ? "var(--blue)" : isActif ? "var(--green)" : "var(--border)"};border-radius:var(--radius);overflow:hidden;opacity:${isActif ? "1" : "0.45"};">
         <div style="background:${isToday ? "var(--blue)" : isActif ? "var(--green-light)" : "var(--surface-2)"};color:${isToday ? "white" : "var(--text)"};padding:8px;text-align:center;">
@@ -835,20 +905,20 @@ function renderCalendrierSection() {
         </div>
       </div>`;
   }
- 
+
   html += `</div></div>`;
- 
+
   // LISTE DÉTAILLÉE — uniquement les jours actifs
   html += `<div class="chart-card"><div style="font-weight:700;font-size:15px;margin-bottom:16px;">📋 Détail des publications</div>`;
- 
+
   window._calPosts = {};
   let calIdx = 0;
- 
+
   for (let d = 0; d < 7; d++) {
     const dayIdx = (todayIdx + d) % 7;
     const jourNom = joursOrdre[dayIdx];
     if (!meilleurJours2.includes(jourNom)) continue; // Jours de repos ignorés
- 
+
     const dateObj = new Date(today);
     dateObj.setDate(today.getDate() + d);
     const dateStr = dateObj.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
@@ -856,14 +926,14 @@ function renderCalendrierSection() {
     const nbPosts = jourNom === meilleurJours2[0] ? 2 : 1;
     const daySlots = topSlots.filter(s => s.day === jourNom).slice(0, nbPosts);
     const slotsToUse = daySlots.length > 0 ? daySlots : topSlots.slice(0, nbPosts);
- 
+
     html += `
       <div style="border-left:3px solid ${isToday ? "var(--blue)" : "var(--green)"};padding-left:16px;margin-bottom:20px;">
         <div style="font-weight:700;font-size:14px;margin-bottom:10px;text-transform:capitalize;">
           ${isToday ? "🔵 " : "🟢 "}${dateStr}
           ${isToday ? `<span style="background:var(--blue);color:white;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;margin-left:8px;">AUJOURD'HUI</span>` : ""}
         </div>`;
- 
+
     slotsToUse.forEach((slot, si) => {
       const platform = platforms[si % platforms.length] || "Reddit";
       const kw = topKw[(d * 2 + si * 3 + 1) % Math.max(topKw.length, 1)] || "recrutement";
@@ -872,7 +942,7 @@ function renderCalendrierSection() {
       const postType = template.type;
       const contenu = template.fn(kw, platform);
       window._calPosts[calIdx] = contenu;
- 
+
       html += `
         <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
@@ -891,14 +961,14 @@ function renderCalendrierSection() {
         </div>`;
       calIdx++;
     });
- 
+
     html += `</div>`;
   }
- 
+
   html += `</div>`;
   el.innerHTML = html;
 }
- 
+
 function copyCalPost(btn, idx) {
   const content = window._calPosts?.[idx];
   if (!content) return;
@@ -912,7 +982,7 @@ function renderPlanning() {
   renderBestSlots();
   renderWeeklyPlanner();
 }
- 
+
 function renderBestSlots() {
   const slotsEl = document.getElementById("best-slots");
   if (!slotsEl) return;
@@ -934,7 +1004,7 @@ function renderBestSlots() {
       <span class="slot-score">${s.avg.toFixed(1)}</span>
     </div>`).join("");
 }
- 
+
 function renderCalendar() {
   const calEl = document.getElementById("calendar-grid");
   if (!calEl) return;
@@ -980,7 +1050,7 @@ function renderCalendar() {
     </div></div>`;
   calEl.innerHTML = html;
 }
- 
+
 /* =====================
    PLANNING SEMAINE INTELLIGENT
 ===================== */
@@ -1000,7 +1070,7 @@ function renderWeeklyPlanner() {
     el.innerHTML = planning;
   }, 600);
 }
- 
+
 function generateWeeklyPlan() {
   // 1. Détecter les plateformes utilisées
   const platformCount = {};
@@ -1008,7 +1078,7 @@ function generateWeeklyPlan() {
     platformCount[p.platform] = (platformCount[p.platform] || 0) + 1;
   });
   const platforms = Object.keys(platformCount).sort((a,b) => platformCount[b] - platformCount[a]);
- 
+
   // 2. Calculer meilleurs créneaux par jour
   const slotMap = {};
   posts.forEach(p => {
@@ -1020,13 +1090,13 @@ function generateWeeklyPlan() {
   const topSlots = Object.values(slotMap)
     .map(s => ({ ...s, avg: s.total / s.count }))
     .sort((a,b) => b.avg - a.avg);
- 
+
   // 3. Calculer nombre de posts/jour selon performances
   const dayCount = {};
   posts.forEach(p => { dayCount[p.jour] = (dayCount[p.jour] || 0) + 1; });
   const avgPostsPerDay = Math.max(1, Math.round(posts.length / 7));
   const postsPerDay = Math.min(avgPostsPerDay, 3);
- 
+
   // 4. Mots-clés qui performent
   const keywordMap = {};
   posts.forEach(p => {
@@ -1040,11 +1110,11 @@ function generateWeeklyPlan() {
     .filter(k => keywordMap[k].count >= 2)
     .sort((a,b) => (keywordMap[b].total/keywordMap[b].count) - (keywordMap[a].total/keywordMap[a].count))
     .slice(0, 8);
- 
+
   // 5. Meilleur type de post
   const typeScores = {};
   posts.forEach(p => {
-    const t = detectPostType(p.title);
+    const t = getPostType(p);
     if (!typeScores[t]) typeScores[t] = { total: 0, count: 0 };
     typeScores[t].total += p.score;
     typeScores[t].count++;
@@ -1052,12 +1122,12 @@ function generateWeeklyPlan() {
   const bestType = Object.keys(typeScores).sort((a,b) =>
     (typeScores[b].total/typeScores[b].count) - (typeScores[a].total/typeScores[a].count)
   )[0];
- 
+
   // 6. Générer les 7 jours
   const joursOrdre = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
   const today = new Date();
   const todayIdx = today.getDay() === 0 ? 6 : today.getDay() - 1;
- 
+
   const postTemplates = {
     "Reddit": {
       "Question": (kw) => `**${kw} : vous avez déjà vécu ça ?**\n\nJe me pose cette question depuis un moment et j'aimerais avoir vos retours honnêtes.\n\nDans mon expérience, j'ai observé que [ta situation concrète liée à ${kw}].\n\nMais je veux savoir ce que VOUS pensez vraiment :\n- Vous avez vécu quelque chose de similaire ?\n- Qu'est-ce qui vous a aidé ?\n- Ou au contraire, qu'est-ce qui a aggravé les choses ?\n\nPas de bonne ou mauvaise réponse. Juste des témoignages vrais. 👇`,
@@ -1070,7 +1140,7 @@ function generateWeeklyPlan() {
       "Opinion": (kw) => `3 vérités sur ${kw} que personne n'ose dire.\n\n(Et pourtant tout le monde le pense)\n\n1️⃣ [Vérité 1 — surprenante mais vraie]\n\n2️⃣ [Vérité 2 — qui dérange un peu]\n\n3️⃣ [Vérité 3 — la plus importante]\n\nJe préfère une conversation honnête à un like poli.\n\nVous êtes d'accord ? Ou je me trompe complètement ? 👇\n\n#${kw.replace(/\s+/g,"")} #OpinionPro #Authenticité`,
     }
   };
- 
+
   let html = `
     <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
       <div>
@@ -1079,30 +1149,30 @@ function generateWeeklyPlan() {
       </div>
       <button onclick="renderWeeklyPlanner()" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-mid);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font);">🔄 Regénérer</button>
     </div>`;
- 
+
   window._planningPosts = {};
   let postIdx = 0;
- 
+
   for (let d = 0; d < 7; d++) {
     const dayIdx = (todayIdx + d) % 7;
     const jourNom = joursOrdre[dayIdx];
     const dateObj = new Date(today);
     dateObj.setDate(today.getDate() + d);
     const dateStr = dateObj.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
- 
+
     // Meilleurs créneaux pour ce jour
     const daySlots = topSlots
       .filter(s => s.day === jourNom)
       .slice(0, postsPerDay);
- 
+
     // Si pas de créneau connu pour ce jour, prendre les meilleurs globaux
     const slotsToUse = daySlots.length > 0 ? daySlots :
       topSlots.filter(s => !daySlots.includes(s)).slice(0, postsPerDay);
- 
+
     const isToday = d === 0;
     const borderColor = isToday ? "var(--blue)" : "var(--border)";
     const bgColor = isToday ? "var(--blue-light)" : "var(--surface-2)";
- 
+
     html += `
       <div style="border:2px solid ${borderColor};border-radius:var(--radius);margin-bottom:16px;overflow:hidden;">
         <div style="background:${bgColor};padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
@@ -1112,7 +1182,7 @@ function generateWeeklyPlan() {
           </div>
           <span style="font-size:12px;color:var(--text-3);">${slotsToUse.length} publication(s)</span>
         </div>`;
- 
+
     slotsToUse.forEach((slot, si) => {
       const platform = platforms[si % platforms.length] || "Reddit";
       const kw = topKw[postIdx % topKw.length] || "recrutement";
@@ -1121,9 +1191,9 @@ function generateWeeklyPlan() {
       const templateFn = postTemplates[platform]?.[postType] || postTemplates["Reddit"][postType];
       const contenu = templateFn ? templateFn(kw) : `Post sur ${kw} — [Rédige ton contenu ici]`;
       const titre = contenu.split("\n")[0].replace(/\*\*/g,"").trim().substring(0, 60);
- 
+
       window._planningPosts[postIdx] = contenu;
- 
+
       html += `
         <div style="padding:14px 16px;border-top:1px solid var(--border);">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
@@ -1144,13 +1214,13 @@ function generateWeeklyPlan() {
         </div>`;
       postIdx++;
     });
- 
+
     html += `</div>`;
   }
- 
+
   return html;
 }
- 
+
 function copyPlanningPost(btn, idx) {
   const content = window._planningPosts?.[idx];
   if (!content) return;
@@ -1159,11 +1229,11 @@ function copyPlanningPost(btn, idx) {
     setTimeout(() => { btn.textContent = "📋 Copier ce post"; }, 2000);
   });
 }
- 
+
 /* =====================
    GÉNÉRATEUR DE POST AVEC API REDDIT
 ===================== */
- 
+
 async function fetchRedditInspo(topic) {
   // Recherche globale sur tout Reddit — pas seulement jobsansfiltre
   const attempts = [
@@ -1172,14 +1242,14 @@ async function fetchRedditInspo(topic) {
     // Recherche sur 6 mois si pas de résultats ce mois-ci
     `https://www.reddit.com/search.json?q=${encodeURIComponent(topic)}&sort=top&t=year&limit=15`,
   ];
- 
+
   for (const url of attempts) {
     try {
       const response = await fetch(url);
       if (!response.ok) continue;
       const json = await response.json();
       if (!json?.data?.children?.length) continue;
- 
+
       const posts = json.data.children
         .map(c => c.data)
         .filter(p => p.title && !p.stickied && p.score > 10)
@@ -1192,7 +1262,7 @@ async function fetchRedditInspo(topic) {
         }))
         .sort((a, b) => b.score - a.score)
         .slice(0, 5);
- 
+
       if (posts.length >= 1) {
         console.log("Reddit OK ✅ :", posts.length, "posts trouvés sur", [...new Set(posts.map(p => p.subreddit))].join(", "));
         return posts;
@@ -1202,11 +1272,11 @@ async function fetchRedditInspo(topic) {
       continue;
     }
   }
- 
+
   console.log("Reddit API non disponible — génération locale");
   return null;
 }
- 
+
 function buildPost1(topic, redditPosts, platform) {
   // FORMAT 1 : Témoignage personnel — inspiré des tendances mais 100% original
   const angles = redditPosts
@@ -1216,10 +1286,10 @@ function buildPost1(topic, redditPosts, platform) {
         return words[Math.floor(Math.random() * words.length)] || topic;
       })
     : [topic];
- 
+
   const angle = angles[0] || topic;
   const titre = `Ce que j'ai vraiment vécu avec ${topic} — personne n'en parle`;
- 
+
   const p = (platform || "Reddit").toLowerCase();
   if (p === "linkedin") {
     return {
@@ -1236,12 +1306,12 @@ function buildPost1(topic, redditPosts, platform) {
     inspo: redditPosts ? `Inspiré de ${redditPosts.length} posts viraux sur r/${redditPosts.map(p=>p.subreddit).join(", r/")}` : null
   };
 }
- 
+
 function buildPost2(topic, redditPosts, platform) {
   // FORMAT 2 : Opinion tranchée avec données réelles
   const titre = `${topic} : voici ce que les chiffres disent vraiment (et c'est surprenant)`;
   const topSubreddits = redditPosts ? [...new Set(redditPosts.map(p => p.subreddit))].slice(0,2).join(" et r/") : "";
- 
+
   const p = (platform || "Reddit").toLowerCase();
   if (p === "linkedin") {
     return {
@@ -1258,12 +1328,12 @@ function buildPost2(topic, redditPosts, platform) {
     inspo: redditPosts ? `Basé sur les tendances de r/${topSubreddits}` : null
   };
 }
- 
+
 function buildPost3(topic, redditPosts, platform) {
   // FORMAT 3 : Question ouverte qui invite au débat
   const titre = `Franchement, comment vous gérez ${topic} au quotidien ? Je veux des vraies réponses`;
   const topSubreddits = redditPosts ? [...new Set(redditPosts.map(p => p.subreddit))].slice(0,2).join(" et r/") : "";
- 
+
   const p = (platform || "Reddit").toLowerCase();
   if (p === "linkedin") {
     return {
@@ -1280,32 +1350,32 @@ function buildPost3(topic, redditPosts, platform) {
     inspo: redditPosts ? `Inspiré des discussions sur r/${topSubreddits}` : null
   };
 }
- 
+
 const generateIdeaBtn = document.getElementById("generate-idea-btn");
 const ideaLoading = document.getElementById("idea-loading");
 const ideaResult = document.getElementById("idea-result");
- 
+
 generateIdeaBtn && generateIdeaBtn.addEventListener("click", async () => {
   const topic = document.getElementById("idea-topic").value.trim();
   const platform = document.getElementById("idea-platform")?.value || "Reddit";
   if (!topic) { alert("Entre un sujet."); return; }
- 
+
   ideaLoading.classList.remove("hidden");
   ideaResult.innerHTML = "";
- 
+
   // Chercher l'inspiration Reddit
   const redditPosts = await fetchRedditInspo(topic);
- 
+
   ideaLoading.classList.add("hidden");
   window._postContents = {};
- 
+
   // Générer les 3 posts avec formats vraiment différents
   const posts3 = [
     buildPost1(topic, redditPosts, platform),
     buildPost2(topic, redditPosts, platform),
     buildPost3(topic, redditPosts, platform),
   ];
- 
+
   // Afficher les posts Reddit viraux si trouvés
   let redditInspoHtml = "";
   if (redditPosts && redditPosts.length > 0) {
@@ -1322,7 +1392,7 @@ generateIdeaBtn && generateIdeaBtn.addEventListener("click", async () => {
         <p style="font-size:11px;color:var(--orange);margin-top:8px;">✨ Les 3 posts ci-dessous sont 100% originaux, inspirés de ces tendances</p>
       </div>`;
   }
- 
+
   ideaResult.innerHTML = redditInspoHtml + posts3.map((post, idx) => {
     window._postContents[idx] = post.contenu;
     return `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
@@ -1341,7 +1411,7 @@ generateIdeaBtn && generateIdeaBtn.addEventListener("click", async () => {
     </div>`;
   }).join("");
 });
- 
+
 function copyPost(btn, idx) {
   const content = window._postContents && window._postContents[idx];
   if (!content) return;
@@ -1350,23 +1420,23 @@ function copyPost(btn, idx) {
     setTimeout(() => { btn.textContent = "📋 Copier le post"; }, 2000);
   });
 }
- 
+
 function useIdea(title) {
   menuItems.forEach(i => i.classList.remove("active"));
   const iaItem = Array.from(menuItems).find(i => i.dataset.section === "ia");
   if (iaItem) { iaItem.classList.add("active"); showSection("ia"); }
   document.getElementById("input-text").value = title;
 }
- 
+
 /* =====================
    GRAPHIQUES
 ===================== */
- 
+
 function destroyCharts() {
   Object.values(charts).forEach(c => { try { c && c.destroy(); } catch(e) {} });
   charts = {};
 }
- 
+
 const chartDefaults = {
   responsive: true,
   plugins: { legend: { display: false } },
@@ -1375,19 +1445,19 @@ const chartDefaults = {
     y: { grid: { color: "#f3f4f6" }, ticks: { font: { family: "'DM Sans'", size: 11 }, color: "#9aa0b0" } }
   }
 };
- 
+
 function safeChart(id, config) {
   const el = document.getElementById(id);
   if (!el) return null;
   try { return new Chart(el, config); } catch(e) { console.error("Chart error:", id, e); return null; }
 }
- 
+
 function renderCharts() {
   if (typeof Chart === "undefined") { setTimeout(() => renderCharts(), 500); return; }
   posts = JSON.parse(localStorage.getItem("posts")) || posts;
   destroyCharts();
   if (posts.length === 0) return;
- 
+
   // Score par jour
   const dayMap = {};
   posts.forEach(p => {
@@ -1403,7 +1473,7 @@ function renderCharts() {
       options: chartDefaults
     });
   }
- 
+
   // Heures
   const hourMap = {};
   posts.forEach(p => {
@@ -1419,11 +1489,11 @@ function renderCharts() {
       options: chartDefaults
     });
   }
- 
+
   // Types
   const typeMap = {};
   posts.forEach(p => {
-    const t = detectPostType(p.title);
+    const t = getPostType(p);
     if (!typeMap[t]) typeMap[t] = { total: 0, count: 0 };
     typeMap[t].total += p.score; typeMap[t].count++;
   });
@@ -1431,11 +1501,11 @@ function renderCharts() {
   if (typeLabels.length) {
     charts.type = safeChart("chart-type", {
       type: "doughnut",
-      data: { labels: typeLabels, datasets: [{ data: typeLabels.map(t => typeMap[t].count), backgroundColor: ["#3b82f6","#10b981","#8b5cf6","#f97316","#64748b"], borderWidth: 0 }] },
+      data: { labels: typeLabels, datasets: [{ data: typeLabels.map(t => typeMap[t].count), backgroundColor: ["#3b82f6","#10b981","#8b5cf6","#f97316","#64748b","#ec4899","#14b8a6","#f59e0b","#6366f1"], borderWidth: 0 }] },
       options: { responsive: true, plugins: { legend: { display: true, position: "right", labels: { font: { family: "'DM Sans'", size: 11 }, color: "#5a6072" } } } }
     });
   }
- 
+
   // Keywords
   const kwMap = {};
   posts.forEach(p => {
@@ -1452,7 +1522,7 @@ function renderCharts() {
       options: { ...chartDefaults, indexAxis: "y" }
     });
   }
- 
+
   // Évolution
   const sorted = [...posts].filter(p => p.date).sort((a,b) => a.date.localeCompare(b.date));
   if (sorted.length) {
@@ -1466,20 +1536,20 @@ function renderCharts() {
     });
   }
 }
- 
+
 function renderHomeCharts() {
   if (typeof Chart === "undefined") { setTimeout(() => renderHomeCharts(), 500); return; }
   try { charts.homeLine && charts.homeLine.destroy(); } catch(e) {}
   try { charts.homePlatform && charts.homePlatform.destroy(); } catch(e) {}
   if (posts.length === 0) return;
- 
+
   const sorted = [...posts].filter(p => p.date).sort((a,b) => a.date.localeCompare(b.date));
   charts.homeLine = safeChart("chart-home-line", {
     type: "line",
     data: { labels: sorted.map(p => p.date), datasets: [{ data: sorted.map(p => p.score), borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.08)", tension: 0.4, fill: true, pointRadius: 3, pointBackgroundColor: "#2563eb" }] },
     options: chartDefaults
   });
- 
+
   const platformMap = {};
   posts.forEach(p => { if (!platformMap[p.platform]) platformMap[p.platform] = 0; platformMap[p.platform]++; });
   const pLabels = Object.keys(platformMap);
@@ -1489,7 +1559,7 @@ function renderHomeCharts() {
     options: { responsive: true, plugins: { legend: { display: true, position: "bottom", labels: { font: { family: "'DM Sans'", size: 11 }, color: "#5a6072" } } } }
   });
 }
- 
+
 /* =====================
    REFRESH GLOBAL
 ===================== */
@@ -1502,7 +1572,7 @@ function refreshAll() {
     setTimeout(() => renderCharts(), 200);
   }
 }
- 
+
 /* =====================
    INIT
 ===================== */
@@ -1511,7 +1581,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTable();
   setTimeout(() => renderHomeCharts(), 100);
   document.getElementById("global-insights").innerHTML = generateGlobalInsights();
- 
+
   // Sync auto au chargement + toutes les 5 min
   setTimeout(() => syncFromSheets(false), 1500);
   setInterval(() => syncFromSheets(false), 5 * 60 * 1000);
