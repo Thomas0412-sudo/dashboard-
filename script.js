@@ -989,27 +989,15 @@ function renderPlanning() {
   renderRecipeAndHooks();
   renderCalendar();
   renderBestSlots();
-  renderWeeklyPlanner();
 }
 
 /* =====================
    RECETTE GAGNANTE + BANQUE DE HOOKS (basé sur le Corps)
 ===================== */
 function renderRecipeAndHooks() {
-  // On s'accroche au conteneur weekly-planner qui existe toujours dans le HTML
-  const anchor = document.getElementById("weekly-planner");
-  if (!anchor) return;
-  const anchorCard = anchor.closest(".chart-card") || anchor;
-
-  // Crée le conteneur une seule fois, juste AVANT la carte du planning intelligent
-  let box = document.getElementById("recipe-hooks-box");
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "recipe-hooks-box";
-    box.className = "chart-card";
-    box.style.marginBottom = "20px";
-    anchorCard.parentNode.insertBefore(box, anchorCard);
-  }
+  // On écrit DIRECTEMENT dans le conteneur du planning intelligent (remplace le charabia)
+  const box = document.getElementById("weekly-planner");
+  if (!box) return;
 
   if (posts.length < 3) {
     box.innerHTML = `<div class="chart-title">🏆 Ta recette gagnante</div><p style="color:var(--text-3);font-size:14px;">Synchronise et tague tes posts pour générer ta recette.</p>`;
@@ -1118,6 +1106,13 @@ function renderRecipeAndHooks() {
   }
 
   box.innerHTML = recetteHtml + hooksHtml;
+
+  // Masquer l'ancien titre "Planning intelligent — 7 prochains jours" devenu obsolète
+  const card = box.closest(".chart-card");
+  if (card) {
+    const oldTitle = card.querySelector(".chart-title");
+    if (oldTitle && oldTitle !== box.querySelector(".chart-title")) oldTitle.style.display = "none";
+  }
 }
 
 function copyHook(el, idx) {
