@@ -206,9 +206,17 @@ function detectPostType(title) {
 }
 
 function getPostType(post) {
-  // Utilise le Format tagué dans le Sheet ; sinon devine depuis le titre (posts manuels)
+  // Utilise UNIQUEMENT le Format tagué dans le Sheet.
+  // Si pas de format → "Non tagué" (au lieu de deviner Storytelling/Post mixte/Opinion).
   if (post && post.format && post.format.trim()) return post.format.trim();
-  return detectPostType(post && post.title ? post.title : "");
+  return "Non tagué";
+}
+
+// Texte combiné Titre + Corps pour l'analyse de mots-clés (plus riche)
+function getPostText(post) {
+  const titre = post && post.title ? post.title : "";
+  const corps = post && post.corps ? post.corps : "";
+  return (titre + " " + corps).trim();
 }
 
 function extractKeywords(title) {
@@ -631,10 +639,10 @@ function generateGlobalInsights() {
     typeScores[type].total += p.score; typeScores[type].count++;
   });
 
-  // Mots-clés — avec score moyen ET nombre d'occurrences minimum
+  // Mots-clés — analyse Titre + Corps, avec score moyen ET nombre d'occurrences minimum
   const keywordMap = {};
   posts.forEach(p => {
-    const keywords = extractKeywords(p.title);
+    const keywords = extractKeywords(getPostText(p));
     // Dédoublonner par post pour éviter qu'un seul post viral fausse tout
     const unique = [...new Set(keywords)];
     unique.forEach(k => {
@@ -820,7 +828,7 @@ function renderCalendrierSection() {
   // Mots-clés performants
   const keywordMap = {};
   posts.forEach(p => {
-    extractKeywords(p.title).forEach(k => {
+    extractKeywords(getPostText(p)).forEach(k => {
       if (!keywordMap[k]) keywordMap[k] = { total: 0, count: 0 };
       keywordMap[k].total += p.score; keywordMap[k].count++;
     });
@@ -1100,7 +1108,7 @@ function generateWeeklyPlan() {
   // 4. Mots-clés qui performent
   const keywordMap = {};
   posts.forEach(p => {
-    extractKeywords(p.title).forEach(k => {
+    extractKeywords(getPostText(p)).forEach(k => {
       if (!keywordMap[k]) keywordMap[k] = { total: 0, count: 0 };
       keywordMap[k].total += p.score;
       keywordMap[k].count++;
@@ -1506,15 +1514,17 @@ function renderCharts() {
     });
   }
 
-  // Keywords
+  // Keywords (Titre + Corps)
   const kwMap = {};
   posts.forEach(p => {
-    extractKeywords(p.title).forEach(k => {
+    const unique = [...new Set(extractKeywords(getPostText(p)))];
+    unique.forEach(k => {
       if (!kwMap[k]) kwMap[k] = { total: 0, count: 0 };
       kwMap[k].total += p.score; kwMap[k].count++;
     });
   });
-  const kwEntries = Object.keys(kwMap).map(k => ({ k, avg: kwMap[k].total/kwMap[k].count })).sort((a,b) => b.avg-a.avg).slice(0, 7);
+  // Au moins 2 occurrences pour être significatif
+  const kwEntries = Object.keys(kwMap).filter(k => kwMap[k].count >= 2).map(k => ({ k, avg: kwMap[k].total/kwMap[k].count })).sort((a,b) => b.avg-a.avg).slice(0, 7);
   if (kwEntries.length) {
     charts.keyword = safeChart("chart-keyword", {
       type: "bar",
