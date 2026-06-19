@@ -1746,6 +1746,20 @@ function refreshAll() {
 ===================== */
 document.addEventListener("DOMContentLoaded", () => {
   posts = JSON.parse(localStorage.getItem("posts")) || [];
+
+  // --- Masquer définitivement l'onglet Calendrier (vide) ---
+  document.querySelectorAll('.sidebar-nav li').forEach(item => {
+    if (item.dataset.section === "calendrier") item.style.display = "none";
+  });
+  // Si la page s'ouvre sur le Calendrier (ancien état), on bascule sur Accueil
+  const calSection = document.getElementById("section-calendrier");
+  if (calSection && !calSection.classList.contains("hidden")) {
+    document.querySelectorAll('.sidebar-nav li').forEach(i => i.classList.remove("active"));
+    const accueilItem = Array.from(document.querySelectorAll('.sidebar-nav li')).find(i => i.dataset.section === "accueil");
+    if (accueilItem) accueilItem.classList.add("active");
+    if (typeof showSection === "function") showSection("accueil");
+  }
+
   renderTable();
   setTimeout(() => renderHomeCharts(), 100);
   document.getElementById("global-insights").innerHTML = generateGlobalInsights();
