@@ -986,9 +986,154 @@ function copyCalPost(btn, idx) {
   });
 }
 function renderPlanning() {
+  renderRecipeAndHooks();
   renderCalendar();
   renderBestSlots();
   renderWeeklyPlanner();
+}
+
+/* =====================
+   RECETTE GAGNANTE + BANQUE DE HOOKS (basé sur le Corps)
+===================== */
+function renderRecipeAndHooks() {
+  const section = document.getElementById("section-planning");
+  if (!section) return;
+
+  // Crée le conteneur une seule fois, tout en haut de la section Planning
+  let box = document.getElementById("recipe-hooks-box");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "recipe-hooks-box";
+    box.className = "chart-card";
+    box.style.marginBottom = "20px";
+    const header = section.querySelector(".page-header");
+    if (header && header.nextSibling) {
+      section.insertBefore(box, header.nextSibling);
+    } else {
+      section.insertBefore(box, section.children[1] || null);
+    }
+  }
+
+  if (posts.length < 3) {
+    box.innerHTML = `<div class="chart-title">🏆 Ta recette gagnante</div><p style="color:var(--text-3);font-size:14px;">Synchronise et tague tes posts pour générer ta recette.</p>`;
+    return;
+  }
+
+  // --- Recette : on regarde le tiers supérieur (tes meilleurs posts) ---
+  const sortedByScore = [...posts].sort((a, b) => b.score - a.score);
+  const topCount = Math.max(3, Math.ceil(sortedByScore.length / 3));
+  const topPosts = sortedByScore.slice(0, topCount);
+
+  // Longueur idéale (corps) sur les meilleurs posts qui ont un corps rempli
+  const topWithBody = topPosts.filter(p => (p.longueur || 0) > 0);
+  let longueurIdeale = null;
+  if (topWithBody.length >= 3) {
+    longueurIdeale = Math.round(topWithBody.reduce((a, p) => a + p.longueur, 0) / topWithBody.length);
+  }
+
+  // Format le plus performant (parmi les formats tagués, min 2 posts)
+  const fmtScores = {};
+  posts.forEach(p => {
+    const f = (p.format || "").trim();
+    if (!f) return;
+    if (!fmtScores[f]) fmtScores[f] = { total: 0, count: 0 };
+    fmtScores[f].total += p.score; fmtScores[f].count++;
+  });
+  const fmtRanked = Object.keys(fmtScores)
+    .filter(f => fmtScores[f].count >= 2)
+    .map(f => ({ f, avg: fmtScores[f].total / fmtScores[f].count, count: fmtScores[f].count }))
+    .sort((a, b) => b.avg - a.avg);
+  const bestFormat = fmtRanked[0] || null;
+
+  // Hook : gain en %
+  const hookStats = { Oui: { total: 0, count: 0 }, Non: { total: 0, count: 0 } };
+  posts.forEach(p => {
+    const h = (p.hook || "").trim();
+    if (h === "Oui") { hookStats.Oui.total += p.score; hookStats.Oui.count++; }
+    else if (h === "Non") { hookStats.Non.total += p.score; hookStats.Non.count++; }
+  });
+  const hookOuiAvg = hookStats.Oui.count ? hookStats.Oui.total / hookStats.Oui.count : 0;
+  const hookNonAvg = hookStats.Non.count ? hookStats.Non.total / hookStats.Non.count : 0;
+  const hookHasData = hookStats.Oui.count > 0 && hookStats.Non.count > 0;
+  const hookGain = hookNonAvg > 0 ? Math.round(((hookOuiAvg - hookNonAvg) / hookNonAvg) * 100) : 0;
+
+  // Phrase de synthèse
+  const reco = [];
+  if (longueurIdeale) reco.push(`vise <strong>~${longueurIdeale} mots</strong>`);
+  if (bestFormat) reco.push(`format <strong>${bestFormat.f}</strong>`);
+  if (hookHasData && hookGain > 0) reco.push(`avec un <strong>hook</strong> (+${hookGain}%)`);
+  const recoPhrase = reco.length ? `Pour maximiser tes chances : ${reco.join(", ")}.` : "Continue à taguer tes posts (Format, Hook) pour affiner ta recette.";
+
+  // --- Banque de hooks : 1ère phrase des meilleurs posts qui ont un corps ---
+  function firstSentence(text) {
+    if (!text) return "";
+    const clean = text.trim();
+    const m = clean.match(/^.*?[.!?](\s|$)/);
+    let s = m ? m[0].trim() : clean;
+    if (s.length > 140) s = s.substring(0, 137).trim() + "...";
+    return s;
+  }
+  const topHooks = sortedByScore
+    .filter(p => p.corps && p.corps.trim().length > 20)
+    .slice(0, 6)
+    .map(p => ({ phrase: firstSentence(p.corps), score: p.score, hook: (p.hook || "").trim() }))
+    .filter(h => h.phrase.length > 10);
+
+  // --- Rendu ---
+  let recetteHtml = `
+    <div class="chart-title">🏆 Ta recette gagnante</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;">
+        <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Longueur idéale</div>
+        <div style="font-size:24px;font-weight:700;color:var(--blue);font-family:var(--font-mono);">${longueurIdeale ? longueurIdeale : "—"}</div>
+        <div style="font-size:11px;color:var(--text-3);">${longueurIdeale ? "mots (corps)" : "pas assez de corps remplis"}</div>
+      </div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;">
+        <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Format n°1</div>
+        <div style="font-size:18px;font-weight:700;color:var(--green);">${bestFormat ? bestFormat.f : "—"}</div>
+        <div style="font-size:11px;color:var(--text-3);">${bestFormat ? `score ${bestFormat.avg.toFixed(1)} · ${bestFormat.count} posts` : "tague tes formats"}</div>
+      </div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:center;">
+        <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Gain du hook</div>
+        <div style="font-size:24px;font-weight:700;color:${hookHasData && hookGain > 0 ? "var(--green)" : "var(--text-3)"};font-family:var(--font-mono);">${hookHasData ? (hookGain > 0 ? "+" + hookGain + "%" : hookGain + "%") : "—"}</div>
+        <div style="font-size:11px;color:var(--text-3);">${hookHasData ? "vs sans hook" : "tague Oui/Non"}</div>
+      </div>
+    </div>
+    <p style="font-size:14px;line-height:1.6;padding:12px 14px;background:var(--blue-light);border-radius:var(--radius);color:var(--text);">💡 ${recoPhrase}</p>`;
+
+  let hooksHtml = "";
+  if (topHooks.length > 0) {
+    hooksHtml = `
+      <div class="chart-title" style="margin-top:20px;">🎣 Tes meilleures accroches (clique pour copier)</div>
+      <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Premières phrases de tes posts les mieux scorés — inspire-t'en pour tes prochains posts</p>
+      ${topHooks.map((h, i) => `
+        <div onclick="copyHook(this, ${i})" data-hook="${h.phrase.replace(/"/g, "&quot;")}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:all 0.15s;display:flex;justify-content:space-between;align-items:center;gap:10px;" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span style="font-size:13px;color:var(--text-2);">${h.phrase.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span>
+          <span style="flex-shrink:0;display:flex;gap:6px;align-items:center;">
+            ${h.hook === "Oui" ? `<span style="font-size:10px;background:var(--green-light);color:var(--green);padding:1px 6px;border-radius:10px;">hook</span>` : ""}
+            <span style="font-size:11px;font-family:var(--font-mono);font-weight:700;color:var(--blue);">${h.score.toFixed(1)}</span>
+          </span>
+        </div>`).join("")}`;
+  } else {
+    hooksHtml = `
+      <div class="chart-title" style="margin-top:20px;">🎣 Tes meilleures accroches</div>
+      <p style="font-size:13px;color:var(--text-3);">Remplis la colonne <strong>Corps</strong> de tes meilleurs posts dans Google Sheets pour voir ici tes accroches gagnantes.</p>`;
+  }
+
+  box.innerHTML = recetteHtml + hooksHtml;
+}
+
+function copyHook(el, idx) {
+  const text = el.getAttribute("data-hook");
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = el.style.background;
+    el.style.background = "var(--green-light)";
+    const span = el.querySelector("span");
+    const origText = span.textContent;
+    span.textContent = "✅ Copié !";
+    setTimeout(() => { el.style.background = orig; span.textContent = origText; }, 1200);
+  });
 }
 
 function renderBestSlots() {
