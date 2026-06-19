@@ -1107,11 +1107,26 @@ function renderRecipeAndHooks() {
 
   box.innerHTML = recetteHtml + hooksHtml;
 
-  // Masquer l'ancien titre "Planning intelligent — 7 prochains jours" devenu obsolète
-  const card = box.closest(".chart-card");
-  if (card) {
-    const oldTitle = card.querySelector(".chart-title");
-    if (oldTitle && oldTitle !== box.querySelector(".chart-title")) oldTitle.style.display = "none";
+  // Supprimer définitivement l'ancien "Planning intelligent — 7 prochains jours"
+  // On cherche tous les titres de la section Planning et on masque la carte qui contient le vieux planning.
+  const planningSection = document.getElementById("section-planning");
+  if (planningSection) {
+    planningSection.querySelectorAll(".chart-card").forEach(card => {
+      // On ne touche pas à la carte qui contient notre recette (weekly-planner)
+      if (card.contains(box)) return;
+      const txt = card.textContent || "";
+      if (txt.includes("Planning intelligent") || txt.includes("Planning des 7") || txt.includes("prochains jours")) {
+        card.style.display = "none";
+      }
+    });
+    // Masquer aussi un éventuel titre orphelin hors carte
+    planningSection.querySelectorAll(".chart-title").forEach(t => {
+      if (box.contains(t)) return;
+      const txt = t.textContent || "";
+      if (txt.includes("Planning intelligent") || txt.includes("prochains jours")) {
+        t.style.display = "none";
+      }
+    });
   }
 }
 
