@@ -161,6 +161,12 @@ if (dateEl) {
    NAVIGATION
 ===================== */
 const menuItems = document.querySelectorAll(".sidebar-nav li");
+
+// Masquer l'onglet "Calendrier" (vide, non utilisé) du menu de gauche
+menuItems.forEach(item => {
+  if (item.dataset.section === "calendrier") item.style.display = "none";
+});
+
 const sections = {
   accueil: document.getElementById("section-accueil"),
   stats: document.getElementById("section-stats"),
