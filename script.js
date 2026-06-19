@@ -996,22 +996,19 @@ function renderPlanning() {
    RECETTE GAGNANTE + BANQUE DE HOOKS (basé sur le Corps)
 ===================== */
 function renderRecipeAndHooks() {
-  const section = document.getElementById("section-planning");
-  if (!section) return;
+  // On s'accroche au conteneur weekly-planner qui existe toujours dans le HTML
+  const anchor = document.getElementById("weekly-planner");
+  if (!anchor) return;
+  const anchorCard = anchor.closest(".chart-card") || anchor;
 
-  // Crée le conteneur une seule fois, tout en haut de la section Planning
+  // Crée le conteneur une seule fois, juste AVANT la carte du planning intelligent
   let box = document.getElementById("recipe-hooks-box");
   if (!box) {
     box = document.createElement("div");
     box.id = "recipe-hooks-box";
     box.className = "chart-card";
     box.style.marginBottom = "20px";
-    const header = section.querySelector(".page-header");
-    if (header && header.nextSibling) {
-      section.insertBefore(box, header.nextSibling);
-    } else {
-      section.insertBefore(box, section.children[1] || null);
-    }
+    anchorCard.parentNode.insertBefore(box, anchorCard);
   }
 
   if (posts.length < 3) {
