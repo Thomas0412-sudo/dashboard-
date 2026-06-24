@@ -461,7 +461,9 @@ document.addEventListener("click", e => {
     const iaItem = Array.from(menuItems).find(i => i.dataset.section === "ia");
     if (iaItem) { iaItem.classList.add("active"); showSection("ia"); }
     document.getElementById("input-text").value = post.title;
-    runAIAnalysis(post.title);
+    const bodyField = document.getElementById("input-body");
+    if (bodyField) bodyField.value = post.corps || "";
+    runAIAnalysis(post.title, post.corps || "");
     return;
   }
 });
@@ -539,84 +541,190 @@ const TEMPLATES_TITRES = [
   (kw) => `Comment j'ai géré ${kw} et ce que ça m'a appris`,
 ];
 
-function analyserTitreAvance(titre) {
-  const t = titre.toLowerCase();
-  const mots = extractKeywords(titre);
-  let score = 3.0;
-  const pointsForts = [], pointsFaibles = [];
+// Helpers de stats calibrées sur les vrais posts
+function getRecipeStats() {
+  const sortedByScore = [...posts].sort((a, b) => b.score - a.score);
+  const topCount = Math.max(3, Math.ceil(sortedByScore.length / 3));
+  const topPosts = sortedByScore.slice(0, topCount);
+  const topWithBody = topPosts.filter(p => (p.longueur || 0) > 0);
+  const longueurIdeale = topWithBody.length >= 3
+    ? Math.round(topWithBody.reduce((a, p) => a + p.longueur, 0) / topWithBody.length)
+    : null;
 
-  if (titre.length >= 40 && titre.length <= 100) { score += 1.2; pointsForts.push("Longueur idéale"); }
-  else if (titre.length < 15) { score -= 1.5; pointsFaibles.push("Titre trop court"); }
-  else if (titre.length > 130) { score -= 0.8; pointsFaibles.push("Titre trop long"); }
+  // Format scores
+  const fmtScores = {};
+  posts.forEach(p => {
+    const f = (p.format || "").trim();
+    if (!f) return;
+    if (!fmtScores[f]) fmtScores[f] = { total: 0, count: 0 };
+    fmtScores[f].total += p.score; fmtScores[f].count++;
+  });
+  const fmtAvg = {};
+  Object.keys(fmtScores).forEach(f => { fmtAvg[f] = { avg: fmtScores[f].total / fmtScores[f].count, count: fmtScores[f].count }; });
+  const fmtRanked = Object.keys(fmtAvg).filter(f => fmtAvg[f].count >= 2).sort((a, b) => fmtAvg[b].avg - fmtAvg[a].avg);
 
-  if (SIGNALS_POSITIFS.question.some(s => t.includes(s))) { score += 1.0; pointsForts.push("Format question → favorise les commentaires"); }
-  if (SIGNALS_POSITIFS.emotion.some(s => t.includes(s))) { score += 1.3; pointsForts.push("Mot émotionnel → fort impact sur le clic"); }
-  if (SIGNALS_POSITIFS.storytelling.some(s => t.includes(s))) { score += 1.1; pointsForts.push("Angle storytelling → très performant sur Reddit"); }
-  if (SIGNALS_POSITIFS.chiffres.some(r => r instanceof RegExp ? r.test(t) : t.includes(r))) { score += 0.9; pointsForts.push("Chiffre concret → crédibilité et curiosité"); }
-  if (SIGNALS_POSITIFS.polémique.some(s => t.includes(s))) { score += 1.2; pointsForts.push("Ton polémique → très viral sur r/jobsansfiltre"); }
-  if (SIGNALS_POSITIFS.conseil.some(s => t.includes(s))) { score += 0.7; pointsForts.push("Format conseil → bon taux de sauvegarde"); }
+  // Hook
+  const hookStats = { Oui: { total: 0, count: 0 }, Non: { total: 0, count: 0 } };
+  posts.forEach(p => {
+    const h = (p.hook || "").trim();
+    if (h === "Oui") { hookStats.Oui.total += p.score; hookStats.Oui.count++; }
+    else if (h === "Non") { hookStats.Non.total += p.score; hookStats.Non.count++; }
+  });
+  const hookOuiAvg = hookStats.Oui.count ? hookStats.Oui.total / hookStats.Oui.count : 0;
+  const hookNonAvg = hookStats.Non.count ? hookStats.Non.total / hookStats.Non.count : 0;
+  const hookHasData = hookStats.Oui.count > 0 && hookStats.Non.count > 0;
+  const hookGain = hookNonAvg > 0 ? Math.round(((hookOuiAvg - hookNonAvg) / hookNonAvg) * 100) : 0;
 
-  if (mots.length < 2) pointsFaibles.push("Peu de mots-clés forts");
+  const globalAvg = posts.length ? posts.reduce((a, p) => a + p.score, 0) / posts.length : 5;
 
-  score = Math.min(10, Math.max(0, score));
-  const potentiel = score >= 6.5 ? "Élevé" : score >= 4 ? "Moyen" : "Faible";
-  const motCle = mots[0] || "recrutement";
-  const type = detectPostType(titre);
-  const alts = [...TEMPLATES_TITRES].sort(() => Math.random() - 0.5).slice(0, 3).map(fn => fn(motCle));
-  const bestDay = getBestDayStats();
-  const bestHour = getBestHourStats();
-  const momentConseil = bestDay && bestHour
-    ? `D'après tes données, publie le ${bestDay.bestDay} vers ${bestHour.bestHour}h.`
-    : "Publie en semaine entre 12h-14h ou le soir vers 20h-22h.";
+  return { longueurIdeale, fmtAvg, fmtRanked, hookHasData, hookGain, hookOuiAvg, hookNonAvg, globalAvg };
+}
+
+// Détecte si une 1ère phrase ressemble à un vrai hook (accroche)
+function looksLikeHook(text) {
+  if (!text) return false;
+  const first = (text.trim().match(/^.*?[.!?](\s|$)/) || [text.trim()])[0].toLowerCase();
+  const signaux = [
+    "un jour", "un ami", "un de mes", "je me rappelle", "je me souviens", "imaginez",
+    "c'est quelque chose", "ça vous est déjà", "vous avez déjà", "la dernière fois",
+    "personne", "j'ai", "récemment", "la semaine dernière", "il y a", "jamais",
+    "le meilleur", "le pire", "on m'a", "quand j'ai"
+  ];
+  return signaux.some(s => first.includes(s));
+}
+
+function analyserPostCalibre(titre, corps) {
+  const r = getRecipeStats();
+  const checks = [];      // {ok: true/false/neutral, text}
+  const conseils = [];
+  let score = r.globalAvg; // on part de la moyenne réelle
+
+  // --- Longueur du corps ---
+  const nbMots = corps ? corps.trim().split(/\s+/).filter(Boolean).length : 0;
+  if (corps && r.longueurIdeale) {
+    const ratio = nbMots / r.longueurIdeale;
+    if (ratio >= 0.7 && ratio <= 1.4) {
+      checks.push({ ok: true, text: `Longueur (${nbMots} mots) dans ta zone gagnante (~${r.longueurIdeale} mots)` });
+      score += 0.8;
+    } else if (ratio < 0.7) {
+      checks.push({ ok: false, text: `Corps un peu court (${nbMots} mots) — tes meilleurs posts font ~${r.longueurIdeale} mots` });
+      conseils.push("Développe un peu plus : contexte, anecdote, détail concret.");
+      score -= 0.4;
+    } else {
+      checks.push({ ok: false, text: `Corps long (${nbMots} mots) vs ~${r.longueurIdeale} mots chez tes gagnants` });
+      conseils.push("Resserre : va à l'essentiel, coupe ce qui n'apporte rien au débat.");
+      score -= 0.2;
+    }
+  } else if (corps) {
+    checks.push({ ok: "neutral", text: `Corps : ${nbMots} mots (pas assez de données pour comparer)` });
+  }
+
+  // --- Hook (1ère phrase du corps, sinon du titre) ---
+  const texteHook = corps && corps.trim().length > 10 ? corps : titre;
+  const hasHook = looksLikeHook(texteHook);
+  if (r.hookHasData) {
+    if (hasHook) {
+      checks.push({ ok: true, text: `Accroche détectée → +${r.hookGain}% en moyenne chez toi` });
+      score += 1.2;
+    } else {
+      checks.push({ ok: false, text: `Pas d'accroche nette en 1ère phrase — tes posts avec hook font +${r.hookGain}%` });
+      conseils.push("Commence par une anecdote, une tension ou un chiffre. Évite d'entrer direct dans le sujet.");
+      score -= 0.8;
+    }
+  } else {
+    checks.push({ ok: hasHook ? true : "neutral", text: hasHook ? "Accroche détectée en 1ère phrase" : "Pas d'accroche nette détectée" });
+  }
+
+  // --- Format estimé (depuis le titre) ---
+  const typeEstime = detectPostType(titre);
+  // mappe le type deviné vers tes formats si possible
+  if (r.fmtRanked.length > 0) {
+    const best = r.fmtRanked[0];
+    const worst = r.fmtRanked[r.fmtRanked.length - 1];
+    checks.push({ ok: "neutral", text: `Ton format le plus performant : ${best} (${r.fmtAvg[best].avg.toFixed(1)})` });
+    conseils.push(`Si possible, oriente ton post vers un format ${best} : c'est ton meilleur levier.`);
+  }
+
+  // --- Titre : question ouverte ? ---
+  if (titre.includes("?")) {
+    checks.push({ ok: true, text: "Titre sous forme de question → favorise les commentaires" });
+    score += 0.4;
+  }
+
+  // Bornage
+  score = Math.min(10, Math.max(1, score));
+  const potentiel = score >= 6 ? "Élevé" : score >= 4 ? "Moyen" : "Faible";
+
+  if (conseils.length === 0) conseils.push("Ton post coche déjà tes critères gagnants. Soigne juste la 1ère phrase.");
 
   return {
-    type, score_estime: Math.round(score * 10) / 10, potentiel,
-    points_forts: pointsForts.length ? pointsForts : ["Structure correcte"],
-    points_faibles: pointsFaibles.length ? pointsFaibles : ["Rien de bloquant"],
-    titres_alternatifs: alts, mots_cles: mots.slice(0, 5),
-    meilleur_moment: momentConseil, conseil_global: CONSEILS_PAR_TYPE[type] || CONSEILS_PAR_TYPE["Post mixte"],
+    score_estime: Math.round(score * 10) / 10,
+    potentiel,
+    type: typeEstime,
+    nbMots,
+    checks,
+    conseils,
+    recipe: r
   };
 }
 
-function runAIAnalysis(title) {
-  const cleanTitle = title.trim();
-  if (!cleanTitle) { alert("Colle un titre à analyser."); return; }
+function runAIAnalysis(title, body) {
+  const cleanTitle = (title || "").trim();
+  const cleanBody = (body || "").trim();
+  if (!cleanTitle && !cleanBody) { alert("Colle au moins un titre ou un corps de post à analyser."); return; }
   aiResult.innerHTML = "";
   aiLoading.classList.remove("hidden");
   setTimeout(() => {
-    const data = analyserTitreAvance(cleanTitle);
+    const data = analyserPostCalibre(cleanTitle, cleanBody);
     aiLoading.classList.add("hidden");
     renderAIResult(data);
-  }, 700);
+  }, 600);
 }
 
 function renderAIResult(data) {
-  const potentielColor = data.potentiel === "Élevé" ? "var(--green)" : data.potentiel === "Moyen" ? "var(--blue)" : "var(--text-3)";
-  const potentielBg = data.potentiel === "Élevé" ? "var(--green-light)" : data.potentiel === "Moyen" ? "var(--blue-light)" : "var(--surface-2)";
+  const potentielColor = data.potentiel === "Élevé" ? "var(--green)" : data.potentiel === "Moyen" ? "var(--blue)" : "var(--red)";
+  const potentielBg = data.potentiel === "Élevé" ? "var(--green-light)" : data.potentiel === "Moyen" ? "var(--blue-light)" : "#fef2f2";
+  const r = data.recipe;
+
+  const checkIcon = (ok) => ok === true ? "✅" : ok === false ? "⚠️" : "•";
+  const checkColor = (ok) => ok === true ? "var(--green)" : ok === false ? "var(--orange)" : "var(--text-3)";
+
+  // Rappel recette
+  const recetteTxt = [];
+  if (r.longueurIdeale) recetteTxt.push(`~${r.longueurIdeale} mots`);
+  if (r.fmtRanked && r.fmtRanked.length) recetteTxt.push(`format ${r.fmtRanked[0]}`);
+  if (r.hookHasData && r.hookGain > 0) recetteTxt.push(`hook (+${r.hookGain}%)`);
+
   aiResult.innerHTML = `
     <div class="ai-cards-grid">
       <div class="ai-card">
-        <h3>Type de post</h3>
-        <div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:8px;">${data.type}</div>
-        <div style="display:inline-block;background:${potentielBg};border:1px solid ${potentielColor};padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700;color:${potentielColor};">Potentiel ${data.potentiel}</div>
-      </div>
-      <div class="ai-card">
         <h3>Score estimé</h3>
         <div class="score-big" style="color:${potentielColor}">${data.score_estime}</div>
-        <div style="font-size:12px;color:var(--text-3);margin-top:4px;">sur 10</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:4px;">sur 10 · potentiel ${data.potentiel}</div>
         <div style="margin-top:10px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
           <div style="height:100%;width:${data.score_estime * 10}%;background:${potentielColor};border-radius:3px;"></div>
         </div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px;">Calibré sur tes ${posts.length} posts réels</div>
       </div>
-      <div class="ai-card"><h3>✅ Points forts</h3><ul>${data.points_forts.map(p => `<li>${p}</li>`).join("")}</ul></div>
-      <div class="ai-card"><h3>⚠️ Points à améliorer</h3><ul>${data.points_faibles.map(p => `<li>${p}</li>`).join("")}</ul></div>
-      <div class="ai-card"><h3>🏷️ Mots-clés</h3><div class="tag-list">${data.mots_cles.map(k => `<span class="tag">${k}</span>`).join("") || "<span style='color:var(--text-3)'>Aucun</span>"}</div></div>
-      <div class="ai-card"><h3>⏰ Meilleur moment</h3><p>${data.meilleur_moment}</p></div>
+      <div class="ai-card">
+        <h3>Type estimé</h3>
+        <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px;">${data.type}</div>
+        <div style="display:inline-block;background:${potentielBg};border:1px solid ${potentielColor};padding:4px 14px;border-radius:20px;font-size:13px;font-weight:700;color:${potentielColor};">Potentiel ${data.potentiel}</div>
+        ${data.nbMots ? `<div style="font-size:12px;color:var(--text-3);margin-top:10px;">Corps : ${data.nbMots} mots</div>` : ""}
+      </div>
       <div class="ai-card wide">
-        <h3>📝 Titres alternatifs <span style="font-weight:400;color:var(--text-3);font-size:11px;">(clique pour copier)</span></h3>
-        ${data.titres_alternatifs.map(t => `<div class="alt-title" onclick="copyTitle(this,'${t.replace(/'/g,"\\'")}')">📋 ${t}</div>`).join("")}
+        <h3>🔍 Diagnostic vs ta recette gagnante</h3>
+        <ul style="list-style:none;padding:0;">
+          ${data.checks.map(c => `<li style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:14px;color:${checkColor(c.ok)};"><span>${checkIcon(c.ok)}</span><span style="color:var(--text-2);">${c.text}</span></li>`).join("")}
+        </ul>
       </div>
-      <div class="ai-card wide"><h3>🧠 Conseil expert</h3><p>${data.conseil_global}</p></div>
+      <div class="ai-card wide">
+        <h3>🎯 Pour maximiser l'impact</h3>
+        <ul style="padding-left:18px;color:var(--text-2);font-size:14px;">
+          ${data.conseils.map(c => `<li style="margin-bottom:6px;">${c}</li>`).join("")}
+        </ul>
+        ${recetteTxt.length ? `<p style="margin-top:12px;padding:10px 14px;background:var(--blue-light);border-radius:var(--radius);font-size:13px;">💡 Rappel de ta recette : ${recetteTxt.join(", ")}.</p>` : ""}
+      </div>
     </div>`;
 }
 
@@ -629,7 +737,23 @@ function copyTitle(el, title) {
   });
 }
 
-analyzeBtn && analyzeBtn.addEventListener("click", () => runAIAnalysis(inputText.value));
+// Injecter un champ "corps" sous le champ titre dans l'onglet Analyse IA
+(function injectBodyField() {
+  if (!inputText) return;
+  inputText.placeholder = "Colle ici le TITRE de ton post...";
+  if (!document.getElementById("input-body")) {
+    const bodyField = document.createElement("textarea");
+    bodyField.id = "input-body";
+    bodyField.placeholder = "Colle ici le CORPS de ton post (optionnel mais recommandé pour un diagnostic complet)...";
+    bodyField.style.cssText = "width:100%;min-height:120px;border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;font-family:var(--font);font-size:15px;color:var(--text);background:var(--surface-2);resize:vertical;outline:none;margin-top:10px;margin-bottom:12px;";
+    inputText.parentNode.insertBefore(bodyField, inputText.nextSibling);
+  }
+})();
+
+analyzeBtn && analyzeBtn.addEventListener("click", () => {
+  const body = document.getElementById("input-body");
+  runAIAnalysis(inputText.value, body ? body.value : "");
+});
 
 /* =====================
    ANALYSE GÉNÉRALE
