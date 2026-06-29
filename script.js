@@ -1892,3 +1892,4 @@ document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => syncFromSheets(false), 1500);
   setInterval(() => syncFromSheets(false), 5 * 60 * 1000);
 });
+
