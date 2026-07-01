@@ -873,27 +873,28 @@ function generateGlobalInsights() {
           </div>`).join("")}
       </div>
 
-      <div class="ai-card">
-        <h3>🏷️ Mots-clés qui boostent</h3>
-        <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Présents dans min. 2 posts performants</p>
-        <div class="tag-list" style="margin-bottom:10px;">
-          ${topKeywords.map(k => `<span class="tag">${k}</span>`).join("") || "<span style='color:var(--text-3);font-size:13px;'>Pas assez de données</span>"}
-        </div>
-        ${topKeywords.map(k => `
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-            <span style="color:var(--text-2);">${k} <span style="color:var(--text-3);font-size:11px;">(${keywordMap[k].count}x)</span></span>
-            <span style="font-family:var(--font-mono);font-weight:600;color:var(--green);">↑ ${(keywordMap[k].totalScore/keywordMap[k].count).toFixed(1)}</span>
-          </div>`).join("")}
-      </div>
-
-      <div class="ai-card">
-        <h3>⚠️ Mots-clés à éviter</h3>
-        <p style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Associés aux posts les moins performants</p>
-        ${weakKeywords.map(k => `
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-            <span style="color:var(--text-2);">${k} <span style="color:var(--text-3);font-size:11px;">(${keywordMap[k].count}x)</span></span>
-            <span style="font-family:var(--font-mono);font-weight:600;color:var(--red);">↓ ${(keywordMap[k].totalScore/keywordMap[k].count).toFixed(1)}</span>
-          </div>`).join("")}
+      <div class="ai-card" style="grid-column:span 2;">
+        <h3>🚀 Tes posts qui ont explosé</h3>
+        <p style="font-size:11px;color:var(--text-3);margin-bottom:12px;">Tes 8 meilleurs posts réels — observe les patterns gagnants (format, hook, angle)</p>
+        ${[...posts].sort((a,b) => b.score - a.score).slice(0, 8).map((p, i) => {
+          const fmt = (p.format || "").trim();
+          const hk = (p.hook || "").trim();
+          const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `<span style="color:var(--text-3);font-size:12px;">#${i+1}</span>`;
+          return `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+            <span style="flex-shrink:0;width:28px;text-align:center;">${medal}</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${(p.title || "(sans titre)").replace(/</g,"&lt;")}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                ${fmt ? `<span style="font-size:10px;background:var(--blue-light);color:var(--blue);padding:1px 8px;border-radius:10px;">${fmt}</span>` : ""}
+                ${hk === "Oui" ? `<span style="font-size:10px;background:var(--green-light);color:var(--green);padding:1px 8px;border-radius:10px;">🎣 hook</span>` : ""}
+                ${p.longueur ? `<span style="font-size:10px;background:var(--surface-2);color:var(--text-3);padding:1px 8px;border-radius:10px;">${p.longueur} mots</span>` : ""}
+              </div>
+            </div>
+            <span style="flex-shrink:0;font-family:var(--font-mono);font-weight:700;font-size:16px;color:var(--green);">${p.score.toFixed(1)}</span>
+          </div>`;
+        }).join("")}
+        <p style="font-size:12px;color:var(--text-2);margin-top:12px;padding:10px 14px;background:var(--blue-light);border-radius:var(--radius);">💡 Regarde ce que tes cartons ont en commun : c'est ÇA ta formule. Reproduis le pattern, pas les mots exacts.</p>
       </div>
 
       <div class="ai-card">
@@ -915,8 +916,6 @@ function generateGlobalInsights() {
         <p style="font-size:15px;line-height:1.8;">
           Tes posts de type <strong>${bestType}</strong> sont les plus performants (score moyen <strong>${(typeScores[bestType]?.total/typeScores[bestType]?.count).toFixed(1)}</strong>).
           Publie de préférence le <strong>${dayStats ? dayStats.bestDay : "?"}</strong> vers <strong>${hourStats ? hourStats.bestHour + "h" : "?"}</strong>.
-          ${topKeywords.length >= 2 ? `Les mots <strong>${topKeywords.slice(0,3).join("</strong>, <strong>")}</strong> sont associés à tes meilleurs posts.` : ""}
-          ${weakKeywords.length >= 2 ? `Évite les titres avec <strong>${weakKeywords.slice(0,2).join("</strong> et <strong>")}</strong> qui performent moins bien.` : ""}
           ${hookHasData && hookGain > 0 ? ` Et n'oublie pas : un bon hook = <strong style="color:var(--green);">+${hookGain}%</strong> de score.` : ""}
         </p>
       </div>
@@ -1805,14 +1804,12 @@ function renderCharts() {
       kwMap[k].total += p.score; kwMap[k].count++;
     });
   });
-  // Au moins 2 occurrences pour être significatif
-  const kwEntries = Object.keys(kwMap).filter(k => kwMap[k].count >= 2).map(k => ({ k, avg: kwMap[k].total/kwMap[k].count })).sort((a,b) => b.avg-a.avg).slice(0, 7);
-  if (kwEntries.length) {
-    charts.keyword = safeChart("chart-keyword", {
-      type: "bar",
-      data: { labels: kwEntries.map(e => e.k), datasets: [{ data: kwEntries.map(e => +e.avg.toFixed(1)), backgroundColor: "#f97316", borderRadius: 6 }] },
-      options: { ...chartDefaults, indexAxis: "y" }
-    });
+  // Bloc "Mots-clés les plus efficaces" retiré : statistiquement trompeur sur un petit corpus FR.
+  // On masque sa carte parente proprement.
+  const kwCanvas = document.getElementById("chart-keyword");
+  if (kwCanvas) {
+    const kwCard = kwCanvas.closest(".chart-card") || kwCanvas.parentElement;
+    if (kwCard) kwCard.style.display = "none";
   }
 
   // Évolution
@@ -1892,4 +1889,3 @@ document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => syncFromSheets(false), 1500);
   setInterval(() => syncFromSheets(false), 5 * 60 * 1000);
 });
-
