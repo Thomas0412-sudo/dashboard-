@@ -485,23 +485,23 @@ function updateStats() {
   // --- Taux de réussite basé sur le TAUX D'ENGAGEMENT (neutralise la croissance de l'audience) ---
   // taux d'engagement = (likes + commentaires) / vues. Un post est "réussi" s'il dépasse la médiane.
   const withViews = posts.filter(p => (p.views || 0) > 0);
-  if (withViews.length >= 4) {
+  const srEl = document.getElementById("success-rate");
+  if (srEl && withViews.length >= 4) {
     const engRates = withViews.map(p => (p.likes + p.comments) / p.views).sort((a, b) => a - b);
     const mid = Math.floor(engRates.length / 2);
     const median = engRates.length % 2 ? engRates[mid] : (engRates[mid - 1] + engRates[mid]) / 2;
     const success = (withViews.filter(p => (p.likes + p.comments) / p.views >= median).length / withViews.length) * 100;
-    document.getElementById("success-rate").textContent = success.toFixed(0) + "%";
-    // Met à jour le petit libellé sous la valeur (quel qu'il soit dans le HTML)
-    const srEl = document.getElementById("success-rate");
-    const card = srEl.closest("div");
-    if (card) {
-      const small = card.querySelector("p, span, small");
-      // on cible le dernier petit texte de la carte (le sous-titre)
-      const subs = card.querySelectorAll("p, span, small");
-      if (subs.length) subs[subs.length - 1].textContent = "engagement > médiane";
-    }
-  } else {
-    document.getElementById("success-rate").textContent = "—";
+    srEl.textContent = success.toFixed(0) + "%";
+    // Met à jour le petit libellé sous la valeur, sans jamais bloquer le calcul si le HTML diffère
+    try {
+      const card = srEl.closest("div");
+      if (card) {
+        const subs = card.querySelectorAll("p, span, small");
+        if (subs.length) subs[subs.length - 1].textContent = "engagement > médiane";
+      }
+    } catch (e) { /* le chiffre est déjà affiché, le libellé n'est pas critique */ }
+  } else if (srEl) {
+    srEl.textContent = "—";
   }
 
   const dayStats = getBestDayStats();
